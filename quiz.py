@@ -29,3 +29,4 @@ def quiz_main():
                 score += 1
             
             st.success(f"You scored {score} out of 2.")
+
