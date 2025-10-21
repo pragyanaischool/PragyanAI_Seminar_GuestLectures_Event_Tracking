@@ -21,7 +21,7 @@ def main():
     with col2:
         try:
             # use_column_width=True makes the image responsive to the column width
-            st.image("PragyanAI_Transperent.png", use_container_width=True)
+            st.image("PragyanAI_Transperent.png", use_column_width=True)
         except Exception as e:
             st.warning(f"Logo not found. Please add 'PragyanAI_Transperent.png' to the root directory.")
 
@@ -93,7 +93,13 @@ def login_form(db_connector, sheet_url, worksheet_name, role_check=None):
                     return
 
                 users_df = db_connector.get_dataframe(user_sheet)
-                required_columns = ['Phone(login)', 'Password', 'Status', 'Role', 'FullName']
+
+                # --- MODIFIED: Dynamic column check based on worksheet ---
+                if worksheet_name == 'Admins':
+                    required_columns = ['Phone(login)', 'Password', 'UserName']
+                else: # For 'Users' sheet
+                    required_columns = ['Phone(login)', 'Password', 'Status', 'Role', 'FullName']
+
                 if not all(col in users_df.columns for col in required_columns):
                     st.error(f"The '{worksheet_name}' sheet is missing one or more required columns. Please ensure it has: {', '.join(required_columns)}.")
                     return
@@ -102,25 +108,27 @@ def login_form(db_connector, sheet_url, worksheet_name, role_check=None):
                     st.error(f"The '{worksheet_name}' database is currently empty.")
                     return
 
-                # Strip whitespace from both input and sheet data for a robust comparison
                 user_record = users_df[users_df['Phone(login)'].astype(str).str.strip() == phone.strip()]
 
                 if user_record.empty:
                     st.error("User not found. Please check your phone number or sign up.")
                 else:
                     user_record = user_record.iloc[0]
-                    # Compare passwords after stripping potential whitespace
                     if str(user_record['Password']).strip() == password.strip():
-                        # Role check logic
-                        if role_check and str(user_record['Role']).strip() != role_check:
-                            st.error(f"Access Denied. You do not have '{role_check}' permissions.")
-                        elif str(user_record['Status']).strip() == 'Approved':
+                        # --- MODIFIED: Handle Admin login success differently ---
+                        if worksheet_name == 'Admins':
                             st.session_state.logged_in = True
-                            st.session_state.user_role = str(user_record['Role']).strip()
-                            st.session_state.user_name = str(user_record['FullName']).strip()
+                            st.session_state.user_role = 'Admin' # Manually assign role
+                            st.session_state.user_name = str(user_record['UserName']).strip()
                             st.rerun()
-                        else:
-                            st.warning("Your account is not yet approved by an admin.")
+                        else: # Handle User/Organizer login
+                            if str(user_record['Status']).strip() == 'Approved':
+                                st.session_state.logged_in = True
+                                st.session_state.user_role = str(user_record['Role']).strip()
+                                st.session_state.user_name = str(user_record['FullName']).strip()
+                                st.rerun()
+                            else:
+                                st.warning("Your account is not yet approved by an admin.")
                     else:
                         st.error("Incorrect password. Please try again.")
 
@@ -227,4 +235,5 @@ def menu(db_connector):
 # --- Entry point of the app ---
 if __name__ == "__main__":
     main()
+    
 
