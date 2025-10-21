@@ -12,7 +12,7 @@ def main():
     
     # Add logo at the top.
     try:
-        st.image("PragyanAI_Transperent.png", width=200)
+        st.image("PragyanAI_Transperent.png", width=400)
     except Exception as e:
         st.warning("Logo image not found. Please add 'PragyanAI_Transperent.png' to your project directory.")
 
@@ -38,12 +38,19 @@ def main():
         st.stop()
 
     if not st.session_state.logged_in:
-        # Create tabs for different login types and signup
-        login_tab, signup_tab = st.tabs(["Login", "Sign Up"])
+        # Create main tabs for Login and Sign Up
+        login_main_tab, signup_tab = st.tabs(["Login", "Sign Up"])
 
-        with login_tab:
+        with login_main_tab:
             st.subheader("Login to Your Account")
-            login_form(user_sheet)
+            # Create sub-tabs for User and Admin Login
+            user_login_tab, admin_login_tab = st.tabs(["User Login", "Admin Login"])
+            
+            with user_login_tab:
+                login_form(user_sheet, role_check=None) # For any approved user
+            
+            with admin_login_tab:
+                login_form(user_sheet, role_check="Admin") # Specifically for Admins
 
         with signup_tab:
             st.subheader("Create a New Account")
@@ -59,10 +66,13 @@ def main():
         
         menu()
 
-def login_form(worksheet):
+def login_form(worksheet, role_check=None):
     users_df = get_users_df(worksheet)
+    
+    # Use a unique key for each form based on the role to avoid widget conflicts
+    form_key = "admin_login_form" if role_check == "Admin" else "user_login_form"
 
-    with st.form("login_form"):
+    with st.form(form_key):
         phone_number = st.text_input("Phone Number (Login ID)")
         password = st.text_input("Password", type="password")
         submitted = st.form_submit_button("Login")
@@ -75,6 +85,11 @@ def login_form(worksheet):
                 if not user_record.empty:
                     user_record = user_record.iloc[0]
                     if user_record['Password'] == password:
+                        # If a specific role is required for this form, check it
+                        if role_check and user_record['Role'] != role_check:
+                            st.error(f"Access Denied. This login is for {role_check} users only.")
+                            return
+
                         if user_record['Status'] == 'Approved':
                             st.session_state.logged_in = True
                             st.session_state.user_role = user_record['Role']
@@ -188,3 +203,4 @@ def menu():
 
 if __name__ == "__main__":
     main()
+
