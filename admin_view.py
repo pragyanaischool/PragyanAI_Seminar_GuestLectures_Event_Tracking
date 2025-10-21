@@ -1,111 +1,123 @@
 import streamlit as st
 import pandas as pd
-from google_sheets_db import (
-    connect_to_sheet, 
-    get_user_db, 
-    get_users_df, 
-    update_user_data,
-    get_seminar_db,
-    get_seminars_df
-)
 
-def admin_main():
-    # Add logo at the top. Ensure the image file is in the same directory as app.py
+# --- Constants ---
+USER_DATA_URL = "https://docs.google.com/spreadsheets/d/1nJq-DCS-bGMqtaVvU9VImWhOEet5uuL-uQHcMKBgSss/edit?usp=sharing"
+USER_WORKSHEET_NAME = "Users"
+SEMINAR_DATA_URL = "https://docs.google.com/spreadsheets/d/1EeuqOzuc90owGbTZTp7XNJObYkFc9gzbG_v-Mko78mc/edit?usp=sharing"
+SEMINAR_WORKSHEET_NAME = "SeminarEvents"
+
+def admin_main(db_connector):
+    """
+    The main function for the Admin Dashboard page.
+    This function now accepts a db_connector object.
+    """
+    st.header("👑 Admin Dashboard")
+
     try:
         st.image("PragyanAI_Transperent.png", width=200)
-    except FileNotFoundError:
-        st.warning("Logo image not found. Please add 'PragyanAI_Transperent.png' to your project directory.")
+    except Exception as e:
+        pass # Logo is optional here
 
-    st.title("Admin Dashboard")
+    # --- Tabbed Interface for Admin Functions ---
+    user_management_tab, seminar_management_tab = st.tabs(["User Management", "Seminar Management"])
 
-    client = connect_to_sheet()
-    if not client:
-        st.stop()
-    
-    # --- User Management Section ---
-    st.header("User Management")
-    user_sheet = get_user_db(client)
-    if not user_sheet:
-        st.error("Could not access the user database.")
-    else:
-        users_df = get_users_df(user_sheet)
-        if users_df.empty:
-            st.info("No users have signed up yet.")
-        else:
-            # --- User Approval List ---
-            st.subheader("Pending User Approvals")
-            not_approved_users = users_df[users_df['Status'] == 'NotApproved']
-            
-            if not not_approved_users.empty:
-                for index, user in not_approved_users.iterrows():
-                    with st.expander(f"{user['FullName']} - {user['Phone(login)']}"):
-                        st.write(f"**College:** {user['CollegeName']}")
-                        st.write(f"**Branch:** {user['Branch']}")
-                        st.write(f"**LinkedIn:** {user['LinkedinProfile']}")
-                        st.write(f"**Area of Interest:** {user['Area_of_Interest']}")
-                        
-                        if st.button(f"Approve {user['FullName']}", key=f"approve_{user['Phone(login)']}"):
-                            phone_login = str(user['Phone(login)'])
-                            if update_user_data(user_sheet, phone_login, "Status", "Approved"):
-                                st.success(f"User {user['FullName']} has been approved.")
-                                st.experimental_rerun()
-                            else:
-                                st.error(f"Failed to approve {user['FullName']}.")
-            else:
-                st.info("No users are currently pending approval.")
+    with user_management_tab:
+        manage_user_approvals(db_connector)
+        promote_users_to_organizer(db_connector)
 
-            # --- View All Users & Promote to Organizer ---
-            st.subheader("All Registered Users")
-            st.dataframe(users_df)
-
-            st.subheader("Promote User to Organizer")
-            promotable_users = users_df[~users_df['Role'].isin(['Admin', 'Organizer', 'Lead'])]
-            if not promotable_users.empty:
-                user_list = promotable_users['FullName'].tolist()
-                selected_user_name = st.selectbox("Select a user to promote", user_list)
-                
-                if st.button("Promote to Organizer"):
-                    user_to_promote = users_df[users_df['FullName'] == selected_user_name].iloc[0]
-                    phone_number = str(user_to_promote['Phone(login)'])
-                    
-                    if update_user_data(user_sheet, phone_number, "Role", "Organizer"):
-                        st.success(f"{selected_user_name} has been promoted to Organizer.")
-                        st.experimental_rerun()
-                    else:
-                        st.error(f"Failed to promote {selected_user_name}.")
-            else:
-                st.info("No users available to be promoted.")
-
-    # --- Seminar Management Section ---
-    st.header("Seminar Management")
-    seminar_sheet = get_seminar_db(client)
-    if not seminar_sheet:
-        st.error("Could not access the seminar database.")
-    else:
-        seminars_df = get_seminars_df(seminar_sheet)
-        
-        st.subheader("View All Seminars")
-        if seminars_df.empty:
-            st.info("No seminars have been created yet.")
-        else:
-            st.dataframe(seminars_df)
-
+    with seminar_management_tab:
+        view_all_seminars(db_connector)
+        # Placeholder for approving seminar events
         st.subheader("Approve Seminar Events")
-        if 'Status' in seminars_df.columns:
-            pending_seminars = seminars_df[seminars_df['Status'] == 'Pending']
-            if not pending_seminars.empty:
-                 for index, seminar in pending_seminars.iterrows():
-                    # Assuming a unique identifier like 'Seminar ID' exists
-                    seminar_id = seminar.get('Seminar ID', f"seminar_{index}")
-                    with st.expander(f"{seminar.get('Seminar Title', 'No Title')} by {seminar.get('Organizer Name', 'N/A')}"):
-                        st.write(f"**Date:** {seminar.get('Date', 'N/A')}")
-                        st.write(f"**Description:** {seminar.get('Description', 'N/A')}")
-                        
-                        if st.button(f"Approve '{seminar.get('Seminar Title', 'No Title')}'", key=f"approve_seminar_{seminar_id}"):
-                            # Note: This requires an 'update_seminar_data' function
-                            st.info("Seminar approval functionality is under development.")
-            else:
-                st.info("No seminars are currently pending approval.")
-        else:
-            st.warning("To enable approvals, please add a 'Status' column to your Seminars Google Sheet.")
+        st.info("Feature to approve seminars coming soon.")
 
+def manage_user_approvals(db_connector):
+    """Displays users awaiting approval and allows admin to approve them."""
+    st.subheader("User Approval List")
+    user_sheet = db_connector.get_worksheet(USER_DATA_URL, USER_WORKSHEET_NAME)
+    if not user_sheet:
+        return
+
+    users_df = db_connector.get_dataframe(user_sheet)
+    if users_df.empty:
+        st.info("No users found in the database.")
+        return
+
+    # Ensure 'Status' column exists before filtering
+    if 'Status' in users_df.columns:
+        not_approved_users = users_df[users_df['Status'] == 'Not Approved']
+        if not not_approved_users.empty:
+            st.write("The following users are awaiting approval:")
+            for index, user in not_approved_users.iterrows():
+                col1, col2 = st.columns([3, 1])
+                col1.write(f"**Name:** {user['FullName']} | **Phone:** {user['Phone(login)']}")
+                if col2.button("Approve", key=f"approve_{user['Phone(login)']}"):
+                    success = db_connector.update_record(
+                        user_sheet,
+                        key_column='Phone(login)',
+                        key_value=user['Phone(login)'],
+                        target_column='Status',
+                        new_value='Approved'
+                    )
+                    if success:
+                        st.success(f"Approved {user['FullName']}.")
+                        st.rerun()
+                    else:
+                        st.error(f"Failed to approve {user['FullName']}.")
+        else:
+            st.success("No users are currently awaiting approval.")
+    else:
+        st.error("The 'Users' sheet is missing the 'Status' column.")
+
+def promote_users_to_organizer(db_connector):
+    """Allows admin to select a user and promote them to the 'Organizer' role."""
+    st.subheader("Promote User to Organizer")
+    user_sheet = db_connector.get_worksheet(USER_DATA_URL, USER_WORKSHEET_NAME)
+    if not user_sheet:
+        return
+
+    users_df = db_connector.get_dataframe(user_sheet)
+    if users_df.empty:
+        return
+
+    # Ensure 'Role' and 'Status' columns exist
+    if 'Role' in users_df.columns and 'Status' in users_df.columns:
+        approved_students = users_df[(users_df['Role'] == 'Student') & (users_df['Status'] == 'Approved')]
+        if not approved_students.empty:
+            user_options = {f"{row['FullName']} ({row['Phone(login)']})": row['Phone(login)'] for index, row in approved_students.iterrows()}
+            selected_user_display = st.selectbox("Select a user to promote:", list(user_options.keys()))
+
+            if st.button("Promote to Organizer"):
+                user_phone = user_options[selected_user_display]
+                success = db_connector.update_record(
+                    user_sheet,
+                    key_column='Phone(login)',
+                    key_value=user_phone,
+                    target_column='Role',
+                    new_value='Organizer'
+                )
+                if success:
+                    st.success(f"Successfully promoted {selected_user_display.split(' (')[0]} to Organizer.")
+                    st.rerun()
+                else:
+                    st.error("Failed to promote user.")
+        else:
+            st.info("No approved students available to promote.")
+    else:
+        st.error("The 'Users' sheet is missing 'Role' or 'Status' columns.")
+
+
+def view_all_seminars(db_connector):
+    """Displays a list of all seminars from the seminar events sheet."""
+    st.subheader("All Seminar Events")
+    seminar_sheet = db_connector.get_worksheet(SEMINAR_DATA_URL, SEMINAR_WORKSHEET_NAME)
+    if not seminar_sheet:
+        return
+
+    seminars_df = db_connector.get_dataframe(seminar_sheet)
+    if not seminars_df.empty:
+        st.dataframe(seminars_df)
+    else:
+        st.info("No seminar events have been created yet.")
+        
