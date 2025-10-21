@@ -1,109 +1,136 @@
 import streamlit as st
 import pandas as pd
+from datetime import datetime
+import gspread # To find cell and update
 
 def admin_main(db_connector):
     """The main function for the Admin Dashboard page."""
     st.title("👑 Admin Dashboard")
-    st.info("Manage users and seminar events from this dashboard.")
+    st.markdown("---")
 
-    # --- Constants for Google Sheets ---
-    USER_DATA_URL = "https://docs.google.com/spreadsheets/d/1nJq-DCS-bGMqtaVvU9VImWhOEet5uuL-uQHcMKBgSss/edit?usp=sharing"
+    # --- Define constants for Google Sheets ---
+    USER_SHEET_URL = "https://docs.google.com/spreadsheets/d/1nJq-DCS-bGMqtaVvU9VImWhOEet5uuL-uQHcMKBgSss/edit?usp=sharing"
+    SEMINAR_SHEET_URL = "https://docs.google.com/spreadsheets/d/1EeuqOzuc90owGbTZTp7XNJObYkFc9gzbG_v-Mko78mc/edit?usp=sharing"
+    
     USER_WORKSHEET_NAME = "Users"
-    SEMINAR_DATA_URL = "https://docs.google.com/spreadsheets/d/1EeuqOzuc90owGbTZTp7XNJObYkFc9gzbG_v-Mko78mc/edit?usp=sharing"
-    SEMINAR_WORKSHEET_NAME = "SeminarEvents"
+    SEMINAR_WORKSHEET_NAME = "Seminar Events" # Please ensure this is the exact name of the tab in your sheet
 
-    # --- Fetch Data ---
-    user_sheet = db_connector.get_worksheet(USER_DATA_URL, USER_WORKSHEET_NAME)
-    seminar_sheet = db_connector.get_worksheet(SEMINAR_DATA_URL, SEMINAR_WORKSHEET_NAME)
+    # --- Data Loading and Caching ---
+    @st.cache_data(ttl=60) # Cache for 1 minute to keep data fresh
+    def load_data():
+        try:
+            user_sheet = db_connector.get_worksheet(USER_SHEET_URL, USER_WORKSHEET_NAME)
+            users_df = db_connector.get_dataframe(user_sheet) if user_sheet else pd.DataFrame()
 
-    if not user_sheet or not seminar_sheet:
-        st.error("Failed to connect to one or more databases. Please check the sheet URLs and names.")
-        return
-
-    users_df = db_connector.get_dataframe(user_sheet)
-    seminars_df = db_connector.get_dataframe(seminar_sheet)
-
-    # --- Main Admin Tabs ---
-    user_tab, seminar_tab = st.tabs(["User Management", "Seminar Management"])
-
-    with user_tab:
-        st.header("User Administration")
-        if users_df.empty:
-            st.warning("The user database is currently empty.")
-        else:
-            handle_user_management(db_connector, user_sheet, users_df)
-
-    with seminar_tab:
-        st.header("Seminar Event Administration")
-        if seminars_df.empty:
-            st.warning("No seminars have been created yet.")
-        else:
-            handle_seminar_management(db_connector, seminar_sheet, seminars_df)
-
-
-def handle_user_management(db_connector, user_sheet, users_df):
-    """Displays UI for managing users."""
-    approval_tab, all_users_tab = st.tabs(["Approval Management", "All Users"])
-
-    with approval_tab:
-        st.subheader("User Approval Requests")
-        approval_df = users_df[users_df['Status'] == 'Not Approved']
-
-        if approval_df.empty:
-            st.success("No pending user approvals.")
-        else:
-            for index, row in approval_df.iterrows():
-                with st.container(border=True):
-                    col1, col2 = st.columns([3, 1])
-                    col1.subheader(row['FullName'])
-                    col1.write(f"**Phone:** {row['Phone(login)']}")
-                    col1.write(f"**Email:** {row['Email']}")
-
-                    if col2.button("Approve User", key=f"approve_{row['Phone(login)']}", use_container_width=True):
-                        if db_connector.update_record(user_sheet, 'Phone(login)', row['Phone(login)'], {'Status': 'Approved'}):
-                            st.success(f"Approved {row['FullName']}.")
-                            st.rerun()
-
-    with all_users_tab:
-        st.subheader("All Registered Users")
-        st.dataframe(users_df)
-
-        st.subheader("Promote User Role")
-        user_list = users_df['Phone(login)'].tolist()
-        selected_user_phone = st.selectbox("Select a user by phone number", user_list)
-        
-        if selected_user_phone:
-            user_data = users_df[users_df['Phone(login)'].astype(str) == str(selected_user_phone)].iloc[0]
-            st.write(f"**Current Role for {user_data['FullName']}:** {user_data['Role']}")
+            seminar_sheet = db_connector.get_worksheet(SEMINAR_SHEET_URL, SEMINAR_WORKSHEET_NAME)
+            seminars_df = db_connector.get_dataframe(seminar_sheet) if seminar_sheet else pd.DataFrame()
             
-            new_role = st.selectbox("Select new role", ["Student", "Organizer", "Lead"], index=["Student", "Organizer", "Lead"].index(user_data['Role']))
+            return users_df, seminars_df, user_sheet, seminar_sheet
+        except Exception as e:
+            st.error(f"Failed to load data from Google Sheets: {e}")
+            return pd.DataFrame(), pd.DataFrame(), None, None
 
-            if st.button(f"Update Role for {user_data['FullName']}", use_container_width=True):
-                if db_connector.update_record(user_sheet, 'Phone(login)', selected_user_phone, {'Role': new_role}):
-                    st.success(f"Updated role for {user_data['FullName']} to {new_role}.")
-                    st.rerun()
+    users_df, seminars_df, user_sheet, seminar_sheet = load_data()
 
-def handle_seminar_management(db_connector, seminar_sheet, seminars_df):
-    """Displays UI for managing seminars."""
-    st.subheader("Approve Pending Seminars")
-    pending_seminars = seminars_df[seminars_df['Status'] == 'Pending']
+    # --- Tabbed Interface ---
+    stats_tab, user_approval_tab, all_users_tab, seminar_list_tab = st.tabs([
+        "📊 Statistics", "⏳ User Approvals", "👥 All Users", "🗓️ Seminar Management"
+    ])
 
-    if pending_seminars.empty:
-        st.success("No seminars are currently pending approval.")
-    else:
-        for index, row in pending_seminars.iterrows():
-            with st.container(border=True):
-                st.subheader(row['Seminar Title'])
-                st.write(f"**Presenter:** {row['Presenter Name(s)']}")
-                st.write(f"**Date:** {row['Date']}")
+    # --- Statistics Tab ---
+    with stats_tab:
+        st.subheader("Platform Statistics")
+        if not users_df.empty and not seminars_df.empty:
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Total Registered Users", len(users_df))
+            col2.metric("Total Seminars Planned", len(seminars_df))
+
+            try:
+                # Convert 'Event Date' to datetime, coercing errors to NaT (Not a Time)
+                seminars_df['Event Date DT'] = pd.to_datetime(seminars_df['Event Date'], errors='coerce')
                 
-                if st.button("Approve Seminar", key=f"approve_seminar_{row['Seminar Title']}", use_container_width=True):
-                    if db_connector.update_record(seminar_sheet, 'Seminar Title', row['Seminar Title'], {'Status': 'Approved'}):
-                        st.success(f"Approved seminar: '{row['Seminar Title']}'.")
+                # Filter out rows where date conversion failed
+                valid_seminars = seminars_df.dropna(subset=['Event Date DT'])
+                
+                upcoming_seminars = valid_seminars[valid_seminars['Event Date DT'] >= datetime.now()]
+                col3.metric("Upcoming Seminars", len(upcoming_seminars))
+            except KeyError:
+                st.warning("'Event Date' column not found in the Seminar Events sheet. Cannot calculate upcoming seminars.")
+            except Exception as e:
+                st.error(f"An error occurred while calculating statistics: {e}")
+
+        else:
+            st.warning("Could not load user or seminar data to display statistics.")
+    
+    # --- User Approval Tab ---
+    with user_approval_tab:
+        st.subheader("Users Waiting for Approval")
+        if user_sheet and not users_df.empty:
+            pending_users = users_df[users_df['Status'] == 'Not Approved']
+
+            if not pending_users.empty:
+                st.info(f"You have **{len(pending_users)}** user(s) to approve.")
+                
+                for index, user in pending_users.iterrows():
+                    with st.container(border=True):
+                        st.write(f"**Name:** {user['FullName']}")
+                        st.text(f"Phone: {user['Phone(login)']}")
+                        st.text(f"Email: {user.get('Email', 'N/A')}")
+                        
+                        if st.button("Approve User", key=f"approve_{user['Phone(login)']}"):
+                            try:
+                                cell = user_sheet.find(str(user['Phone(login)']))
+                                headers = user_sheet.row_values(1)
+                                status_col_index = headers.index('Status') + 1
+                                user_sheet.update_cell(cell.row, status_col_index, 'Approved')
+                                st.success(f"Approved {user['FullName']}!")
+                                st.cache_data.clear()
+                                st.rerun()
+                            except gspread.exceptions.CellNotFound:
+                                st.error(f"Could not find user with phone {user['Phone(login)']} in the sheet to approve.")
+                            except ValueError:
+                                st.error("Critical error: Could not find the 'Status' column header in the Users sheet.")
+                            except Exception as e:
+                                st.error(f"An error occurred while approving: {e}")
+            else:
+                st.success("No users are currently waiting for approval. Great job! ✅")
+        else:
+            st.warning("Could not load user data to check for approvals.")
+
+    # --- All Users Tab ---
+    with all_users_tab:
+        st.subheader("Full User List")
+        if not users_df.empty:
+            st.dataframe(users_df, use_container_width=True)
+        else:
+            st.warning("Could not load user data.")
+            
+    # --- All Seminars Tab ---
+    with seminar_list_tab:
+        st.subheader("Full Seminar List & Link Editor")
+        st.info("You can edit the seminar links directly in the table below. The Google Sheet will be updated after you finish editing.")
+        if seminar_sheet and not seminars_df.empty:
+            # Drop the helper datetime column if it exists before displaying
+            seminars_to_edit = seminars_df.drop(columns=['Event Date DT'], errors='ignore')
+            
+            with st.form("seminar_edit_form"):
+                edited_seminars_df = st.data_editor(
+                    seminars_to_edit,
+                    num_rows="dynamic",
+                    use_container_width=True,
+                    key="seminar_editor"
+                )
+                
+                if st.form_submit_button("Save Changes to Google Sheet"):
+                    try:
+                        # Overwrite the entire sheet with the updated dataframe
+                        db_connector.update_worksheet_with_dataframe(seminar_sheet, edited_seminars_df)
+                        st.success("Seminar list updated successfully in Google Sheets!")
+                        st.cache_data.clear()
                         st.rerun()
-
-    st.divider()
-    st.subheader("All Seminar Events")
-    st.dataframe(seminars_df)
-
+                    except Exception as e:
+                        st.error(f"Failed to save changes to Google Sheets: {e}")
+        else:
+            st.warning("Could not load seminar data.")
+            
 
