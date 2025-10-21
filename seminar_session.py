@@ -105,7 +105,7 @@ def seminar_session_main(db_connector):
                     st.info(f"Debugging: enrollment_ws: {enrollment_ws}")
                     if enrollment_ws:
                         enrollment_df = db_connector.get_dataframe(enrollment_ws)
-                        st.write(enrollment_df.head()
+                        st.write(enrollment_df.head())
                         presenter_row = enrollment_df[enrollment_df['Presentor_FullName'] == live_presenter]
                         st.info(f"Debugging: presenter_row: {presenter_row}")
                         if not presenter_row.empty:
