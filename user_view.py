@@ -37,3 +37,4 @@ def user_main():
             # Logic to save enrollment details
             st.success(f"You have successfully enrolled in {selected_seminar}!")
             st.info("Your enrollment is pending admin approval.")
+            
