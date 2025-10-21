@@ -2,60 +2,69 @@ import pandas as pd
 
 def get_dummy_seminars():
     """Returns a DataFrame of dummy seminar events."""
-    data = [
-        {
-            "Seminar Title": "Introduction to Machine Learning",
-            "Date": "2025-11-10",
-            "Time": "10:00 AM",
-            "Presenter Name(s)": "Dr. Alex Greyson",
-            "Seminar Description": "A foundational course on the core concepts of machine learning, including supervised and unsupervised learning.",
-            "Google Meet Link": "https://meet.google.com/fake-link-one",
-            "Google Slides Link": "https://docs.google.com/presentation/d/1Pw-yvOblXeGqAKtJ8smB__JuWQNG7N_P/edit?usp=sharing"
-        },
-        {
-            "Seminar Title": "Advanced Python for Data Science",
-            "Date": "2025-11-12",
-            "Time": "2:00 PM",
-            "Presenter Name(s)": "Ms. Brenda Smith",
-            "Seminar Description": "Explore advanced Python libraries like Pandas, NumPy, and Scikit-learn for efficient data manipulation and analysis.",
-            "Google Meet Link": "https://meet.google.com/fake-link-two",
-            "Google Slides Link": "https://docs.google.com/presentation/d/1Pw-yvOblXeGqAKtJ8smB__JuWQNG7N_P/edit?usp=sharing"
-        },
-        {
-            "Seminar Title": "The Future of Artificial Intelligence",
-            "Date": "2025-11-15",
-            "Time": "11:00 AM",
-            "Presenter Name(s)": "Prof. Charles Xavier",
-            "Seminar Description": "A guest lecture discussing the future trends, ethical considerations, and potential impact of AI on society.",
-            "Google Meet Link": "https://meet.google.com/fake-link-three",
-            "Google Slides Link": "https://docs.google.com/presentation/d/1Pw-yvOblXeGqAKtJ8smB__JuWQNG7N_P/edit?usp=sharing"
-        },
-        {
-            "Seminar Title": "Web Development with React",
-            "Date": "2025-11-18",
-            "Time": "3:00 PM",
-            "Presenter Name(s)": "Mr. David Wu",
-            "Seminar Description": "Learn the fundamentals of building modern, interactive web applications using the React library.",
-            "Google Meet Link": "https://meet.google.com/fake-link-four",
-            "Google Slides Link": "https://docs.google.com/presentation/d/1Pw-yvOblXeGqAKtJ8smB__JuWQNG7N_P/edit?usp=sharing"
-        }
-    ]
-    return pd.DataFrame(data)
-
-def get_dummy_users():
-    """Returns a DataFrame of dummy users."""
-    data = [
-        {
-            "Phone(login)": "1234567890",
-            "FullName": "John Doe",
-            "Role": "Student",
-            "EnrolledSeminars": "Introduction to Machine Learning,The Future of Artificial Intelligence"
-        },
-        {
-            "Phone(login)": "0987654321",
-            "FullName": "Jane Smith",
-            "Role": "Lead",
-            "EnrolledSeminars": "Advanced Python for Data Science"
-        }
-    ]
+    data = {
+        'Seminar Title': [
+            'Introduction to Machine Learning',
+            'Advanced Python for Data Science',
+            'The Future of Quantum Computing',
+            'Web Development with React',
+            'Cybersecurity Best Practices'
+        ],
+        'Date': [
+            '2025-11-10',
+            '2025-11-15',
+            '2025-11-20',
+            '2025-11-25',
+            '2025-12-01'
+        ],
+        'Time': [
+            '14:00',
+            '16:30',
+            '11:00',
+            '15:00',
+            '10:00'
+        ],
+        'Presenter Name(s)': [
+            'Dr. Anjali Sharma',
+            'Rohan Verma',
+            'Prof. Ken Thompson',
+            'Priya Singh',
+            'Amit Kumar'
+        ],
+        'Seminar Description': [
+            'A beginner-friendly session covering the core concepts of machine learning, including supervised and unsupervised learning.',
+            'Deep dive into advanced Python libraries like NumPy, Pandas, and Scikit-learn for efficient data manipulation and analysis.',
+            'An exciting look into the principles of quantum mechanics and how they are being applied to build the next generation of computers.',
+            'Learn how to build modern, interactive user interfaces for web applications using the React JavaScript library.',
+            'Essential tips and strategies for protecting your digital assets from common cyber threats in today\'s landscape.'
+        ],
+        'WhatsApp Link': [
+            'https://chat.whatsapp.com/samplelink1',
+            'https://chat.whatsapp.com/samplelink2',
+            'https://chat.whatsapp.com/samplelink3',
+            'https://chat.whatsapp.com/samplelink4',
+            'https://chat.whatsapp.com/samplelink5'
+        ],
+        'Google Meet / Other Link': [
+            'https://meet.google.com/aim-ymsn-daw',
+            'https://meet.google.com/sample-link-2',
+            'https://meet.google.com/sample-link-3',
+            'https://meet.google.com/sample-link-4',
+            'https://meet.google.com/sample-link-5'
+        ],
+        'Google Slides Link': [
+            'https://docs.google.com/presentation/d/1Pw-yvOblXeGqAKtJ8smB__JuWQNG7N_P/edit?usp=sharing',
+            'https://docs.google.com/presentation/d/sample-slides-link-2/edit',
+            'https://docs.google.com/presentation/d/sample-slides-link-3/edit',
+            'https://docs.google.com/presentation/d/sample-slides-link-4/edit',
+            'https://docs.google.com/presentation/d/sample-slides-link-5/edit'
+        ],
+        'Status': [
+            'Approved',
+            'Approved',
+            'Approved',
+            'Pending',
+            'Approved'
+        ]
+    }
     return pd.DataFrame(data)
