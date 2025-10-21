@@ -140,16 +140,20 @@ def organizer_main(db_connector):
         seminar_sheet = db_connector.get_worksheet(SEMINAR_SHEET_URL, SEMINAR_WORKSHEET_NAME)
         if seminar_sheet:
             seminars_df = db_connector.get_dataframe(seminar_sheet)
-            if not seminars_df.empty and 'Organizer_Name' in seminars_df.columns:
-                organizer_events = seminars_df[seminars_df['Organizer_Name'] == st.session_state.user_name]
-                if not organizer_events.empty:
+            if not seminars_df.empty and 'Organizer_Name' in seminars_df.columns and 'Approved_Status' in seminars_df.columns:
+                # --- MODIFIED: Filter for approved events created by the current organizer ---
+                approved_organizer_events = seminars_df[
+                    (seminars_df['Organizer_Name'] == st.session_state.user_name) &
+                    (seminars_df['Approved_Status'] == 'Approved')
+                ]
+                if not approved_organizer_events.empty:
                     event_to_view = st.selectbox(
-                        "Select an event to see enrollments",
-                        options=organizer_events['Seminar_Event_Name'].tolist(),
+                        "Select an approved event to see enrollments",
+                        options=approved_organizer_events['Seminar_Event_Name'].tolist(),
                         key="view_enrollments_select"
                     )
                     if event_to_view:
-                        event_details = organizer_events[organizer_events['Seminar_Event_Name'] == event_to_view].iloc[0]
+                        event_details = approved_organizer_events[approved_organizer_events['Seminar_Event_Name'] == event_to_view].iloc[0]
                         enrollment_sheet_link = event_details.get('Seminar_GuestLecture_Sheet_Link')
 
                         if enrollment_sheet_link and "docs.google.com/spreadsheets" in enrollment_sheet_link:
@@ -170,6 +174,4 @@ def organizer_main(db_connector):
                         else:
                             st.info("No enrollment sheet link provided for this event.")
                 else:
-                    st.info("You have no events to view candidates for.")
-
-
+                    st.info("You have no approved events to view candidates for.")
