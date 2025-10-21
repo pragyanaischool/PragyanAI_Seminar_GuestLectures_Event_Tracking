@@ -9,7 +9,18 @@ from google_sheets_db import connect_to_sheet, get_user_db, get_users_df, add_us
 
 def main():
     st.set_page_config(page_title="Seminar Platform", layout="wide")
+    
+    # Add logo at the top.
+    try:
+        st.image("PragyanAI_Transperent.png", width=200)
+    except Exception as e:
+        st.warning("Logo image not found. Please add 'PragyanAI_Transperent.png' to your project directory.")
+
     st.title("Guest Lecture and Seminar Platform")
+
+    # This application connects to the Google Sheet for user data:
+    # https://docs.google.com/spreadsheets/d/1nJq-DCS-bGMqtaVvU9VImWhOEet5uuL-uQHcMKBgSss
+    # IMPORTANT: Ensure the sheet has a worksheet named "Users" and is shared with your service account email.
 
     # Initialize session state variables
     if 'logged_in' not in st.session_state:
@@ -156,7 +167,7 @@ def menu():
         elif page == "Quiz":
             quiz_main()
             
-    elif st.session_state['user_role'] == "User":
+    elif st.session_state['user_role'] in ["Student", "User"]:
         page = st.sidebar.radio("Go to", ["View Seminars", "Live Seminar", "Evaluation", "Quiz"])
         if page == "View Seminars":
             user_main()
@@ -169,3 +180,4 @@ def menu():
 
 if __name__ == "__main__":
     main()
+
