@@ -159,19 +159,19 @@ def organizer_main(db_connector):
                         if enrollment_sheet_link and "docs.google.com/spreadsheets" in enrollment_sheet_link:
                             with st.spinner("Fetching enrollment data..."):
                                 try:
-                                    # We need to guess the name of the tab in the target sheet.
-                                    # Common names are 'Sheet1' or 'Enrollments' or in your case 'Presentor_FullName'.
-                                    # This is a point of failure if the name is inconsistent.
-                                    enrollment_ws = db_connector.get_worksheet(enrollment_sheet_link, "Presentor_FullName")
+                                    # --- MODIFIED: Changed worksheet name to 'Seminar_GuestLecture_List' ---
+                                    enrollment_ws = db_connector.get_worksheet(enrollment_sheet_link, "Seminar_GuestLecture_List")
                                     if enrollment_ws:
                                         enrollments_df = db_connector.get_dataframe(enrollment_ws)
                                         st.write(f"**Enrolled Candidates for '{event_to_view}'**")
                                         st.dataframe(enrollments_df)
                                     else:
-                                        st.warning("Could not access the enrollment worksheet. Check the link and ensure a 'Presentor_FullName' tab exists.")
+                                        # --- MODIFIED: Updated warning message ---
+                                        st.warning("Could not access the enrollment worksheet. Check the link and ensure a 'Seminar_GuestLecture_List' tab exists in that sheet.")
                                 except Exception as e:
                                     st.error(f"Failed to load enrollment data. The link might be incorrect or the sheet structure is not as expected. Error: {e}")
                         else:
                             st.info("No enrollment sheet link provided for this event.")
                 else:
                     st.info("You have no approved events to view candidates for.")
+
