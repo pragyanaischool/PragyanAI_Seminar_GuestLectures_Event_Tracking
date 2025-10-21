@@ -45,4 +45,3 @@ def seminar_session_main():
     question = st.text_area("Your question for the presenter or AI")
     if st.button("Submit Question"):
         st.success("Your question has been submitted.")
-        
