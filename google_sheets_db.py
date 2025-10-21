@@ -64,13 +64,26 @@ class GoogleSheetsConnector:
             st.error(f"Failed to add record: {e}")
             return False
 
+    def append_record(self, worksheet, row_data):
+        """Appends a new row of data to the worksheet. Alias for add_record."""
+        try:
+            worksheet.append_row(row_data)
+            return True
+        except Exception as e:
+            st.error(f"Failed to add record: {e}")
+            return False
+
     def update_record(self, worksheet, lookup_col, lookup_val, update_data):
         """Updates a specific record in the worksheet."""
         try:
-            cell = worksheet.find(str(lookup_val), in_column=worksheet.headers.index(lookup_col) + 1)
+            # Headers are in the first row
+            headers = worksheet.row_values(1)
+            # Find the column index for the lookup column
+            lookup_col_index = headers.index(lookup_col) + 1
+            cell = worksheet.find(str(lookup_val), in_column=lookup_col_index)
             row_index = cell.row
             for col_name, new_val in update_data.items():
-                col_index = worksheet.headers.index(col_name) + 1
+                col_index = headers.index(col_name) + 1
                 worksheet.update_cell(row_index, col_index, new_val)
             return True
         except (gspread.exceptions.CellNotFound, ValueError, AttributeError):
@@ -78,4 +91,3 @@ class GoogleSheetsConnector:
         except Exception as e:
             st.error(f"Failed to update record: {e}")
         return False
-
