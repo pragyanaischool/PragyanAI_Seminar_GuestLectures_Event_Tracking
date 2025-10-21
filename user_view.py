@@ -11,16 +11,9 @@ def user_main(db_connector):
     """
     The main function for the User Home page.
     """
-    # --- Improved Header Section ---
-    col1, col2 = st.columns([1, 5])
-    with col1:
-        try:
-            st.image("PragyanAI_Transperent.png", width=120)
-        except Exception as e:
-            pass  # Logo is optional here
-    with col2:
-        st.title("User View")
-        st.write(f"Welcome to the platform, {st.session_state.user_name}!")
+    # --- Header Section ---
+    st.title("User View")
+    st.write(f"Welcome to the platform, {st.session_state.user_name}!")
 
     st.info("Here you can manage your seminar enrollments and view upcoming events.")
     st.divider()
