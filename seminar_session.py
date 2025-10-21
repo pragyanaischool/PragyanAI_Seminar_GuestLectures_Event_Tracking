@@ -17,7 +17,8 @@ def seminar_session_main(db_connector):
             seminars_df = db_connector.get_dataframe(seminar_sheet)
             # Filter for upcoming events
             seminars_df['Event_Date'] = pd.to_datetime(seminars_df['Event_Date'], errors='coerce')
-            today = datetime.now().normalize()
+            # --- MODIFIED: A more robust way to get today's date at midnight ---
+            today = pd.to_datetime(datetime.now().date())
             upcoming_seminars_df = seminars_df[seminars_df['Event_Date'] >= today].copy()
             upcoming_seminars_df.sort_values(by='Event_Date', inplace=True)
         else:
@@ -102,3 +103,5 @@ def seminar_session_main(db_connector):
                     st.success(f"Your question has been submitted to the {ask_target}!")
                 elif submit_question:
                     st.warning("Please enter a question.")
+
+
