@@ -108,7 +108,7 @@ def seminar_session_main(db_connector):
                         #st.write(enrollment_df.head())
                         presenter_row = enrollment_df[enrollment_df['Presentor_FullName'] == live_presenter]
                         #st.write(live_presenter, enrollment_df['Presentor_FullName'] )
-                        
+                        st.write(presenter_row )
                         if not presenter_row.empty:
                             for i in range(len(presenter_row)):
                                 slides_link_from_sheet = presenter_row.iloc[i].get('PresentationLink', '')
