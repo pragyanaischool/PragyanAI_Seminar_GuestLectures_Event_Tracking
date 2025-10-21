@@ -13,7 +13,8 @@ def admin_main(db_connector):
     SEMINAR_SHEET_URL = "https://docs.google.com/spreadsheets/d/1EeuqOzuc90owGbTZTp7XNJObYkFc9gzbG_v-Mko78mc/edit?usp=sharing"
     
     USER_WORKSHEET_NAME = "Users"
-    SEMINAR_WORKSHEET_NAME = "Seminar Events" # Please ensure this is the exact name of the tab in your sheet
+    # Updated to match the user's provided sheet name
+    SEMINAR_WORKSHEET_NAME = "Seminar_Guest_Event_List"
 
     # --- Data Loading and Caching ---
     @st.cache_data(ttl=60) # Cache for 1 minute to keep data fresh
@@ -91,41 +92,61 @@ def admin_main(db_connector):
     # --- Seminar Approvals Tab ---
     with seminar_approval_tab:
         st.subheader("Seminars Waiting for Approval")
-        st.warning("Feature in development. To enable seminar approvals, please add a 'Status' column to your 'Seminar Events' Google Sheet.", icon="⚠️")
-        # Placeholder for future functionality
-        # if not seminars_df.empty and 'Status' in seminars_df.columns:
-        #     ... # Approval logic here
-        # else:
-        #     st.info("Seminar approval feature requires a 'Status' column in the sheet.")
+        if seminar_sheet and not seminars_df.empty and 'Approved_Status' in seminars_df.columns:
+            pending_seminars = seminars_df[seminars_df['Approved_Status'] == 'Not Approved']
+
+            if not pending_seminars.empty:
+                st.info(f"You have **{len(pending_seminars)}** seminar(s) to approve.")
+
+                for index, seminar in pending_seminars.iterrows():
+                    with st.container(border=True):
+                        st.write(f"**Seminar:** {seminar['Seminar_Event_Name']}")
+                        st.text(f"Domain: {seminar.get('Domain', 'N/A')}")
+                        
+                        if st.button("Approve Seminar", key=f"approve_seminar_{seminar['Seminar_Event_Name']}"):
+                            try:
+                                cell = seminar_sheet.find(seminar['Seminar_Event_Name'])
+                                headers = seminar_sheet.row_values(1)
+                                status_col_index = headers.index('Approved_Status') + 1
+                                seminar_sheet.update_cell(cell.row, status_col_index, 'Approved')
+                                st.success(f"Approved seminar: {seminar['Seminar_Event_Name']}!")
+                                st.cache_data.clear()
+                                st.rerun()
+                            except gspread.exceptions.CellNotFound:
+                                st.error(f"Could not find the seminar in the sheet to approve.")
+                            except ValueError:
+                                st.error("Critical error: Could not find the 'Approved_Status' column header in the sheet.")
+                            except Exception as e:
+                                st.error(f"An error occurred while approving the seminar: {e}")
+            else:
+                st.success("No seminars are currently waiting for approval. ✅")
+        else:
+            st.warning("Could not load seminar data or 'Approved_Status' column not found in the sheet.")
 
 
     # --- Update Seminar Info Tab ---
     with seminar_update_tab:
         st.subheader("Select a Seminar to Update")
-        if seminar_sheet and not seminars_df.empty and 'Seminar Event Topic' in seminars_df.columns:
+        # Updated to use the new column name for seminar identification
+        if seminar_sheet and not seminars_df.empty and 'Seminar_Event_Name' in seminars_df.columns:
             
-            # Use a unique key for the selectbox to avoid state issues
-            seminar_topics = seminars_df['Seminar Event Topic'].tolist()
+            seminar_topics = seminars_df['Seminar_Event_Name'].tolist()
             selected_topic = st.selectbox(
                 "Choose a seminar:",
                 options=seminar_topics,
-                index=None, # No default selection
+                index=None,
                 placeholder="Select a seminar event...",
                 key="seminar_update_select"
             )
 
             if selected_topic:
                 # Get the full record for the selected seminar
-                seminar_data = seminars_df[seminars_df['Seminar Event Topic'] == selected_topic].iloc[0]
+                seminar_data = seminars_df[seminars_df['Seminar_Event_Name'] == selected_topic].iloc[0]
                 
                 st.markdown(f"### Editing: **{selected_topic}**")
                 
                 with st.form(key="update_seminar_form"):
-                    
-                    # Create a dictionary to hold the updated data
                     updated_values = {}
-                    
-                    # Dynamically create text inputs for each column
                     for col_name in seminars_df.columns:
                         updated_values[col_name] = st.text_input(
                             f"{col_name}",
@@ -136,23 +157,18 @@ def admin_main(db_connector):
 
                     if submit_button:
                         try:
-                            # Find the row in the sheet using the unique Seminar Event Topic
                             cell = seminar_sheet.find(selected_topic)
-                            
                             if not cell:
                                 st.error(f"Could not find the seminar '{selected_topic}' in the sheet to update.")
                                 return
 
                             sheet_row_number = cell.row
-                            
-                            # Convert dictionary values to a list in the correct order
                             new_row_data = [updated_values[col] for col in seminars_df.columns]
                             
-                            # Update the specific row in the Google Sheet
                             seminar_sheet.update(f"A{sheet_row_number}", [new_row_data])
                             
                             st.success(f"Successfully updated '{selected_topic}'!")
-                            st.cache_data.clear() # Clear cache to fetch new data
+                            st.cache_data.clear()
                             st.rerun()
 
                         except gspread.exceptions.CellNotFound:
@@ -160,4 +176,5 @@ def admin_main(db_connector):
                         except Exception as e:
                             st.error(f"An error occurred while updating the seminar: {e}")
         else:
-            st.warning("Could not load seminar data or 'Seminar Event Topic' column not found.")
+            st.warning("Could not load seminar data or 'Seminar_Event_Name' column not found.")
+
