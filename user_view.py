@@ -12,17 +12,16 @@ def user_main(db_connector):
     The main function for the User Home page.
     """
     # --- Improved Header Section ---
-    col1, col2 = st.columns([1, 4])
+    col1, col2 = st.columns([1, 5])
     with col1:
         try:
-            st.image("PragyanAI_Transperent.png", width=150)
+            st.image("PragyanAI_Transperent.png", width=120)
         except Exception as e:
             pass  # Logo is optional here
     with col2:
-        st.title("Guest Lecture and Seminar Platform")
-        st.subheader("🏠 Home")
+        st.title("User View")
+        st.write(f"Welcome to the platform, {st.session_state.user_name}!")
 
-    st.write(f"Welcome to the PragyanAI Seminar Platform, {st.session_state.user_name}!")
     st.info("Here you can manage your seminar enrollments and view upcoming events.")
     st.divider()
 
@@ -32,11 +31,9 @@ def user_main(db_connector):
 
     user_sheet = db_connector.get_worksheet(USER_DATA_URL, USER_WORKSHEET_NAME)
     users_df = db_connector.get_dataframe(user_sheet)
-    
-    # NOTE: Assumes user's phone number is stored in session state upon login.
-    # This might require a small change in 'app.py'.
+
     user_phone = st.session_state.get('user_phone', None)
-    
+
     if not user_phone or users_df.empty:
         st.error("Could not retrieve user session information. Please try logging out and back in.")
         return
@@ -44,25 +41,29 @@ def user_main(db_connector):
     try:
         current_user = users_df[users_df['Phone(login)'].astype(str) == user_phone].iloc[0]
         enrolled_seminars_str = current_user.get('EnrolledSeminars', '')
-        enrolled_seminars = enrolled_seminars_str.split(',') if enrolled_seminars_str else []
+        enrolled_seminars = [s.strip() for s in enrolled_seminars_str.split(',') if s.strip()]
     except (IndexError, KeyError):
         st.error("Could not find your user record. Please contact an admin.")
         return
 
     # --- Tabbed Layout ---
-    tab1, tab2, tab3 = st.tabs(["🗓️ All Upcoming", "✅ My Enrolled Seminars", "🔍 Available to Enroll"])
+    tab1, tab2, tab3 = st.tabs([
+        "Upcoming Seminars / Guest Events",
+        "Seminars Events - Enrolled",
+        "Seminar Events - Yet to Enroll"
+    ])
 
     with tab1:
-        st.header("All Upcoming Seminars")
+        st.header("All Upcoming Events")
         display_seminars(seminars_df, "all", enrolled_seminars, db_connector, user_sheet, user_phone)
 
     with tab2:
-        st.header("Seminars You Are Enrolled In")
+        st.header("Events You Are Enrolled In")
         enrolled_df = seminars_df[seminars_df['Seminar Title'].isin(enrolled_seminars)]
         display_seminars(enrolled_df, "enrolled", enrolled_seminars, db_connector, user_sheet, user_phone)
 
     with tab3:
-        st.header("Seminars Available for Enrollment")
+        st.header("Events Available for Enrollment")
         not_enrolled_df = seminars_df[~seminars_df['Seminar Title'].isin(enrolled_seminars)]
         display_seminars(not_enrolled_df, "not_enrolled", enrolled_seminars, db_connector, user_sheet, user_phone)
 
@@ -82,33 +83,38 @@ def display_seminars(df, view_type, enrolled_list, db_connector, user_sheet, use
         seminar_title = row.get('Seminar Title', 'No Title')
         with st.container(border=True):
             st.subheader(seminar_title)
-            
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Date", str(row.get('Date', 'TBA')))
-            col2.metric("Time", str(row.get('Time', 'TBA')))
-            col3.metric("Presenter", str(row.get('Presenter Name(s)', 'N/A')))
-            
+
+            col_info_1, col_info_2, col_info_3 = st.columns(3)
+            col_info_1.metric("Date", str(row.get('Date', 'TBA')))
+            col_info_2.metric("Time", str(row.get('Time', 'TBA')))
+            col_info_3.metric("Presenter", str(row.get('Presenter Name(s)', 'N/A')))
+
             st.markdown(f"**Description:** {row.get('Seminar Description', 'No description available.')}")
             st.divider()
 
             # --- Action Buttons ---
-            if view_type == "enrolled":
-                st.info("✅ You are enrolled. To join, go to the **'Live Session'** page from the sidebar.")
-            else: # For 'all' and 'not_enrolled' views
+            col_action_1, col_action_2 = st.columns(2)
+            with col_action_1:
                 if seminar_title in enrolled_list:
-                    st.success("✔️ You are already enrolled in this seminar.")
+                    st.success("✔️ You are enrolled")
                 else:
-                    if st.button("✍️ Enroll Now", key=f"enroll_{seminar_title}_{view_type}"):
+                    if st.button("✍️ Enroll Now", key=f"enroll_{seminar_title}_{view_type}", use_container_width=True):
                         handle_enrollment(seminar_title, enrolled_list, db_connector, user_sheet, user_phone)
+            
+            with col_action_2:
+                if st.button("Go to Seminar View ➔", key=f"view_{seminar_title}_{view_type}", use_container_width=True):
+                    # Store the selected seminar in session state for the other page to use
+                    st.session_state.selected_seminar_title = seminar_title
+                    st.info(f"'{seminar_title}' selected. Please navigate to the '🎤 Live Session' page from the sidebar to view details.")
 
 
 def handle_enrollment(seminar_title, current_enrollments, db_connector, user_sheet, user_phone):
     """Handles the logic to enroll a user in a seminar."""
     new_enrollments = current_enrollments + [seminar_title]
     new_enrollments_str = ",".join(new_enrollments)
-    
+
     update_data = {'EnrolledSeminars': new_enrollments_str}
-    
+
     if db_connector.update_record(user_sheet, 'Phone(login)', user_phone, update_data):
         st.success(f"Successfully enrolled in '{seminar_title}'! The page will now refresh.")
         st.rerun()
