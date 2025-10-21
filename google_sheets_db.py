@@ -2,106 +2,80 @@ import streamlit as st
 import gspread
 from google.oauth2.service_account import Credentials
 import pandas as pd
-from gspread.exceptions import WorksheetNotFound
-
-# Use Streamlit's caching to initialize the connection once.
-@st.cache_resource
-def get_gspread_client():
-    """Establishes a connection to the Google Sheets API and returns the client."""
-    try:
-        creds_dict = st.secrets["gcp_service_account"]
-        scopes = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-        creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
-        client = gspread.authorize(creds)
-        return client
-    except Exception as e:
-        st.error(f"Failed to connect to Google Sheets: {e}")
-        return None
 
 class GoogleSheetsConnector:
-    """A class to handle all interactions with the Google Sheets database."""
+    """A class to interact with Google Sheets."""
 
     def __init__(self):
-        """Initializes the connector by getting the gspread client."""
-        self.client = get_gspread_client()
+        self.creds = self._get_credentials()
+        self.client = self._get_client()
 
-    def get_worksheet(self, sheet_url: str, worksheet_name: str):
-        """
-        Opens a spreadsheet by its URL and returns a specific worksheet.
-        
-        Args:
-            sheet_url (str): The full URL of the Google Sheet.
-            worksheet_name (str): The name of the tab/worksheet to open.
+    @st.cache_resource
+    def _get_credentials(_self):
+        """Get credentials from Streamlit secrets."""
+        try:
+            scopes = [
+                "https://www.googleapis.com/auth/spreadsheets",
+                "https://www.googleapis.com/auth/drive"
+            ]
+            return Credentials.from_service_account_info(
+                st.secrets["gcp_service_account"],
+                scopes=scopes,
+            )
+        except Exception as e:
+            st.error(f"Failed to load credentials: {e}")
+            return None
 
-        Returns:
-            gspread.Worksheet or None: The worksheet object if found, otherwise None.
-        """
+    @st.cache_resource
+    def _get_client(_self):
+        """Get the gspread client, authorized with credentials."""
+        if _self.creds:
+            return gspread.authorize(_self.creds)
+        return None
+
+    def get_worksheet(self, sheet_url, worksheet_name):
+        """Gets a specific worksheet (tab) from a Google Sheet."""
         if not self.client:
-            st.error("Cannot get worksheet: Google Sheets client is not available.")
+            st.error("Gspread client not initialized. Check credentials.")
             return None
         try:
             spreadsheet = self.client.open_by_url(sheet_url)
             return spreadsheet.worksheet(worksheet_name)
-        except WorksheetNotFound:
-            st.error(f"Worksheet '{worksheet_name}' not found in the Google Sheet. Please check the sheet URL and worksheet name.")
-            return None
+        except gspread.exceptions.SpreadsheetNotFound:
+            st.error(f"Spreadsheet not found at URL: {sheet_url}")
+        except gspread.exceptions.WorksheetNotFound:
+            st.error(f"Worksheet '{worksheet_name}' not found in the spreadsheet.")
         except Exception as e:
-            st.error(f"Failed to open worksheet '{worksheet_name}': {e}")
-            return None
+            st.error(f"An error occurred while accessing the sheet: {e}")
+        return None
 
-    def get_dataframe(self, worksheet: gspread.Worksheet) -> pd.DataFrame:
-        """
-        Fetches all records from a worksheet and returns them as a pandas DataFrame.
-        """
+    def get_dataframe(self, worksheet):
+        """Converts a worksheet into a pandas DataFrame."""
         if worksheet:
             return pd.DataFrame(worksheet.get_all_records())
         return pd.DataFrame()
 
-    def append_record(self, worksheet: gspread.Worksheet, data_list: list) -> bool:
-        """
-        Appends a new row of data to the specified worksheet.
-        """
-        if not worksheet:
-            st.error("Cannot append record: Worksheet is not valid.")
-            return False
+    def add_record(self, worksheet, row_data):
+        """Appends a new row of data to the worksheet."""
         try:
-            worksheet.append_row(data_list)
+            worksheet.append_row(row_data)
             return True
         except Exception as e:
-            st.error(f"Failed to append record: {e}")
+            st.error(f"Failed to add record: {e}")
             return False
 
-    def update_record(self, worksheet: gspread.Worksheet, key_column: str, key_value: str, target_column: str, new_value: str) -> bool:
-        """
-        Updates a specific cell in a worksheet. It finds a row by a key value
-        in a key column and updates a cell in the target column of that row.
-        """
-        if not worksheet:
-            st.error("Cannot update record: Worksheet is not valid.")
-            return False
+    def update_record(self, worksheet, lookup_col, lookup_val, update_data):
+        """Updates a specific record in the worksheet."""
         try:
-            # Find the row and column indices
-            headers = worksheet.row_values(1)
-            if key_column not in headers:
-                st.error(f"Key column '{key_column}' not found.")
-                return False
-            if target_column not in headers:
-                st.error(f"Target column '{target_column}' not found.")
-                return False
-
-            key_col_index = headers.index(key_column) + 1
-            target_col_index = headers.index(target_column) + 1
-
-            # Find the cell to update
-            cell_list = worksheet.findall(str(key_value), in_column=key_col_index)
-            if not cell_list:
-                st.warning(f"Record with {key_column} = '{key_value}' not found.")
-                return False
-
-            # Update the first matching record's target column
-            row_index = cell_list[0].row
-            worksheet.update_cell(row_index, target_col_index, new_value)
+            cell = worksheet.find(str(lookup_val), in_column=worksheet.headers.index(lookup_col) + 1)
+            row_index = cell.row
+            for col_name, new_val in update_data.items():
+                col_index = worksheet.headers.index(col_name) + 1
+                worksheet.update_cell(row_index, col_index, new_val)
             return True
+        except (gspread.exceptions.CellNotFound, ValueError, AttributeError):
+            st.error(f"Could not find record where {lookup_col} is {lookup_val}.")
         except Exception as e:
-            st.error(f"An error occurred while updating the sheet: {e}")
-            return False
+            st.error(f"Failed to update record: {e}")
+        return False
+
