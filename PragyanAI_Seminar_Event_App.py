@@ -17,9 +17,10 @@ st.set_page_config(
 def main():
     """Main function to run the Streamlit app."""
     # Display logo in a centered column
-    col1, col2, col3 = st.columns([2,3,2])
+    col1, col2, col3 = st.columns([1, 2, 1]) # Adjusted columns for better centering
     with col2:
         try:
+            # use_column_width=True makes the image responsive to the column width
             st.image("PragyanAI_Transperent.png", use_column_width=True)
         except Exception as e:
             st.warning(f"Logo not found. Please add 'PragyanAI_Transperent.png' to the root directory.")
@@ -226,4 +227,4 @@ def menu(db_connector):
 # --- Entry point of the app ---
 if __name__ == "__main__":
     main()
-    
+
