@@ -7,7 +7,7 @@ def seminar_session_main(db_connector):
     st.header("🎤 Go to a Live Session")
 
     # --- Add a refresh button ---
-    if st.button("🔄 Refresh Data"):
+    if st.button("🔄 Refresh Events List"):
         st.rerun()
 
     # Define constants for Google Sheets
@@ -75,11 +75,14 @@ def seminar_session_main(db_connector):
         live_details = st.session_state.get('live_session_details', {})
         st.success(f"Now Viewing: {live_details.get('Seminar_Event_Name')}")
 
+        # --- MODIFIED: Added a refresh button specific to the session view ---
+        if st.button("🔄 Refresh Session Info"):
+            st.rerun()
+
         tab1, tab2, tab3 = st.tabs(["▶️ Live Session", "🖼️ Slide View", "❓ Q&A"])
 
         with tab1:
             st.write("Join the live session using the link below.")
-            # --- MODIFIED: Added a text box for manual URL entry ---
             meet_link_from_sheet = live_details.get('Meet_session_Link', '')
             manual_meet_link = st.text_input(
                 "Meeting URL:", 
@@ -90,16 +93,23 @@ def seminar_session_main(db_connector):
             if manual_meet_link:
                 st.link_button("🚀 Launch Live Seminar (Opens in New Tab)", manual_meet_link, use_container_width=True)
             else:
-                st.info("The Google Meet link for this session has not been provided. Please paste it above to launch.")
+                st.info("The meeting link for this session has not been provided. Please paste it above to launch.")
 
         with tab2:
-            st.write("View the presentation slides for this session.")
-            slides_link = live_details.get('Sample_Presentation_Links') # Correct column for slides
-            if slides_link and "docs.google.com/presentation" in slides_link:
-                embed_url = slides_link.replace("/edit", "/embed?start=false&loop=false&delayms=3000")
+            st.write("View or provide the presentation slides for this session.")
+            # --- MODIFIED: Added a text box for manual URL entry for slides ---
+            slides_link_from_sheet = live_details.get('Sample_Presentation_Links', '')
+            manual_slides_link = st.text_input(
+                "Slides URL:",
+                value=slides_link_from_sheet,
+                placeholder="Paste the Google Slides URL here"
+            )
+
+            if manual_slides_link and "docs.google.com/presentation" in manual_slides_link:
+                embed_url = manual_slides_link.replace("/edit", "/embed?start=false&loop=false&delayms=3000")
                 st.components.v1.iframe(embed_url, height=480)
             else:
-                st.info("The Google Slides link for this session has not been provided or is invalid.")
+                st.info("A valid Google Slides link has not been provided. Please paste it above to view.")
         
         with tab3:
             st.subheader("Ask a Question")
