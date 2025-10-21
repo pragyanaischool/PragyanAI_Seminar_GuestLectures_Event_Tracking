@@ -1,11 +1,15 @@
 import streamlit as st
 import pandas as pd
-#from google_sheets_db import GoogleSheetsDB
+# Corrected import to use the new class name
 from google_sheets_db import GoogleSheetsConnector
 from admin_view import admin_main
 from organizer_view import organizer_main
 from user_view import user_main
 from seminar_session import seminar_session_main
+
+# --- Constants ---
+USER_DATA_URL = "https://docs.google.com/spreadsheets/d/1nJq-DCS-bGMqtaVvU9VImWhOEet5uuL-uQHcMKBgSss/edit?usp=sharing"
+USER_WORKSHEET_NAME = "Users"
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -30,24 +34,23 @@ def main():
         st.session_state.user_role = None
         st.session_state.user_name = None
 
-    # Connect to Google Sheets
-    try:
-        # Using the correct sheet name as confirmed
-        user_sheet_name = "PragyanAI-Seminar-GuestLeacture_Event_UserData"
-        user_db = GoogleSheetsDB(st.secrets["gcp_service_account"], user_sheet_name)
-        user_sheet = user_db.worksheet("Users") # The tab name inside the sheet
-    except Exception as e:
-        st.error(f"Failed to connect to the user database. Please check your Google Sheets setup and secrets. Error: {e}")
+    # --- Initialize Google Sheets Connector ---
+    # Using the correct, updated class name 'GoogleSheetsConnector'
+    db_connector = GoogleSheetsConnector()
+    user_sheet = db_connector.get_worksheet(USER_DATA_URL, USER_WORKSHEET_NAME)
+
+    if user_sheet is None:
+        # The connector already shows detailed errors, so a simple message here is fine.
+        st.error("Could not establish a connection to the user database. The app cannot proceed.")
         return
 
     # --- Login/Signup/Main App View Logic ---
     if not st.session_state.logged_in:
-        login_signup_forms(user_sheet)
+        login_signup_forms(db_connector, user_sheet)
     else:
-        # Display the main application menu and content
-        menu()
+        menu(db_connector)
 
-def login_signup_forms(user_sheet):
+def login_signup_forms(db_connector, user_sheet):
     """Displays the login and signup forms in tabs."""
     login_tab, signup_tab = st.tabs(["Login", "Sign Up"])
 
@@ -55,19 +58,20 @@ def login_signup_forms(user_sheet):
         admin_login_form, user_login_form = st.columns(2)
         with admin_login_form:
             st.header("Admin Login")
-            login_form(user_sheet, role_check='Admin')
+            login_form(db_connector, user_sheet, role_check='Admin')
         with user_login_form:
             st.header("User / Organizer Login")
-            login_form(user_sheet, role_check=None) # Allows any approved user
+            login_form(db_connector, user_sheet, role_check=None)
 
     with signup_tab:
         st.header("Create a New Account")
-        signup_form(user_sheet)
+        signup_form(db_connector, user_sheet)
 
 
-def login_form(user_sheet, role_check=None):
+def login_form(db_connector, user_sheet, role_check=None):
     """Creates a login form and handles authentication."""
-    with st.form(key=f"login_form_{role_check or 'user'}"):
+    form_key = f"login_form_{role_check or 'user'}"
+    with st.form(key=form_key):
         phone = st.text_input("Phone Number (Login ID)")
         password = st.text_input("Password", type="password")
         submit_button = st.form_submit_button(label="Login")
@@ -77,46 +81,38 @@ def login_form(user_sheet, role_check=None):
                 st.warning("Please enter both phone number and password.")
                 return
 
-            try:
-                users_df = pd.DataFrame(user_sheet.get_all_records())
+            users_df = db_connector.get_dataframe(user_sheet)
+            required_columns = ['Phone(login)', 'Password', 'Status', 'Role', 'FullName']
+            
+            if users_df.empty:
+                st.error("User database is currently empty.")
+                return
 
-                # --- Data Validation ---
-                required_columns = ['Phone(login)', 'Password', 'Status', 'Role', 'FullName']
-                missing_columns = [col for col in required_columns if col not in users_df.columns]
-                if missing_columns:
-                    st.error(f"The 'Users' sheet is missing required columns: {', '.join(missing_columns)}. Please check the sheet headers.")
-                    return
-                # --- End Validation ---
+            missing_columns = [col for col in required_columns if col not in users_df.columns]
+            if missing_columns:
+                st.error(f"The '{USER_WORKSHEET_NAME}' sheet is missing required columns: {', '.join(missing_columns)}.")
+                return
 
-                if users_df.empty:
-                    st.error("User database is currently empty.")
-                    return
+            user_record = users_df[users_df['Phone(login)'].astype(str) == phone]
 
-                user_record = users_df[users_df['Phone(login)'].astype(str) == phone]
-
-                if user_record.empty:
-                    st.error("User not found. Please check your phone number or sign up.")
-                else:
-                    user_record = user_record.iloc[0]
-                    if user_record['Password'] == password:
-                        # Role check logic
-                        if role_check and user_record['Role'] != role_check:
-                            st.error(f"Access Denied. You do not have '{role_check}' permissions.")
-                        elif user_record['Status'] == 'Approved':
-                            st.session_state.logged_in = True
-                            st.session_state.user_role = user_record['Role']
-                            st.session_state.user_name = user_record['FullName']
-                            st.rerun()
-                        else:
-                            st.warning("Your account is not yet approved by an admin.")
+            if user_record.empty:
+                st.error("User not found. Please check your phone number or sign up.")
+            else:
+                user_record = user_record.iloc[0]
+                if user_record['Password'] == password:
+                    if role_check and user_record['Role'] != role_check:
+                        st.error(f"Access Denied. You do not have '{role_check}' permissions.")
+                    elif user_record['Status'] == 'Approved':
+                        st.session_state.logged_in = True
+                        st.session_state.user_role = user_record['Role']
+                        st.session_state.user_name = user_record['FullName']
+                        st.rerun()
                     else:
-                        st.error("Incorrect password. Please try again.")
+                        st.warning("Your account is not yet approved by an admin.")
+                else:
+                    st.error("Incorrect password. Please try again.")
 
-            except Exception as e:
-                st.error(f"An error occurred during login: {e}")
-
-
-def signup_form(user_sheet):
+def signup_form(db_connector, user_sheet):
     """Creates a signup form and handles new user registration."""
     with st.form(key="signup_form"):
         st.subheader("Personal Information")
@@ -154,50 +150,33 @@ def signup_form(user_sheet):
                 st.error("Passwords do not match.")
                 return
             
-            try:
-                users_df = pd.DataFrame(user_sheet.get_all_records())
-                if not users_df.empty and phone_login in users_df['Phone(login)'].astype(str).values:
-                    st.error("This phone number is already registered. Please log in.")
-                    return
+            users_df = db_connector.get_dataframe(user_sheet)
+            if not users_df.empty and phone_login in users_df['Phone(login)'].astype(str).values:
+                st.error("This phone number is already registered. Please log in.")
+                return
 
-                new_user_data = {
-                    "FullName": full_name,
-                    "CollegeName": college,
-                    "Branch": branch,
-                    "RollNO(UniversityRegNo)": reg_no,
-                    "YearofPassing_Passed": pass_year,
-                    "Phone(login)": phone_login,
-                    "Phone(Whatsapp)": phone_whatsapp,
-                    "Email": email,
-                    "Password": password,
-                    "Status": "Not Approved",
-                    "Role": "Student", # Default role
-                    "Experience": experience,
-                    "Brief_Presentor": brief_presenter,
-                    "LinkedinProfile": linkedin,
-                    "Github_Profile": github,
-                    "Area_of_Interest": interest_area
-                }
-                user_sheet.append_row(list(new_user_data.values()))
+            # This assumes the order of columns in your Google Sheet.
+            # It's better to match headers, but append_row requires a list.
+            new_user_data = [
+                full_name, college, branch, reg_no, pass_year, phone_login,
+                phone_whatsapp, email, password, "Not Approved", "Student",
+                experience, brief_presenter, linkedin, github, interest_area
+            ]
+            
+            if db_connector.append_record(user_sheet, new_user_data):
                 st.success("Registration successful! An admin will approve your account shortly.")
+            else:
+                st.error("Failed to register user. Please try again later.")
 
-            except Exception as e:
-                st.error(f"An error occurred during signup: {e}")
-
-
-def menu():
-    """Displays the sidebar menu based on user role and directs them to the appropriate default page."""
+def menu(db_connector):
+    """Displays the sidebar menu based on user role."""
     st.sidebar.success(f"Welcome, {st.session_state.user_name}!")
     st.sidebar.write(f"Your Role: **{st.session_state.user_role}**")
     
-    # Initialize page options dictionary
+    role = st.session_state.user_role
     page_options = {}
 
-    # Determine the page order and options based on the user's role
-    role = st.session_state.user_role
-
     if role == 'Admin':
-        # Admin sees Admin Dashboard first
         page_options = {
             "👑 Admin Dashboard": admin_main,
             "📝 Organizer Dashboard": organizer_main,
@@ -205,14 +184,12 @@ def menu():
             "🎤 Live Session": seminar_session_main,
         }
     elif role in ['Organizer', 'Lead']:
-        # Organizer/Lead sees Organizer Dashboard first
         page_options = {
             "📝 Organizer Dashboard": organizer_main,
             "🏠 Home": user_main,
             "🎤 Live Session": seminar_session_main,
         }
     else: # Default for 'Student' or any other role
-        # Regular users see the User Home first
         page_options = {
             "🏠 Home": user_main,
             "🎤 Live Session": seminar_session_main,
@@ -220,9 +197,9 @@ def menu():
 
     selection = st.sidebar.radio("Go to", list(page_options.keys()))
     
-    # Render the selected page
     page_function = page_options[selection]
-    page_function()
+    # Pass the db_connector instance to the selected page's main function
+    page_function(db_connector)
 
     if st.sidebar.button("Logout"):
         st.session_state.logged_in = False
