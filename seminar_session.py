@@ -102,11 +102,12 @@ def seminar_session_main(db_connector):
                 st.info(f"Debugging: Looking for slides in this sheet: {enrollment_link}")
                 try:
                     enrollment_ws = db_connector.get_worksheet(enrollment_link, "Seminar_GuestLecture_List")
-                    st.info(f"Debugging: Looking for slides in this sheet: {enrollment_ws}")
+                    st.info(f"Debugging: enrollment_ws: {enrollment_ws}")
                     if enrollment_ws:
                         enrollment_df = db_connector.get_dataframe(enrollment_ws)
+                        st.info(f"Debugging: enrollment_df: {enrollment_df}")
                         presenter_row = enrollment_df[enrollment_df['Presentor_FullName'] == live_presenter]
-                        st.info(f"Debugging: Looking for slides in this sheet: {presenter_row}")
+                        st.info(f"Debugging: presenter_row: {presenter_row}")
                         if not presenter_row.empty:
                             slides_link_from_sheet = presenter_row.iloc[0].get('PresentationLink', '')
                 except Exception:
