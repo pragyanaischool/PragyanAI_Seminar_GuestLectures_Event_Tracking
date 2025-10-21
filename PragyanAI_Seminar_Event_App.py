@@ -60,7 +60,7 @@ def main():
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         try:
-            st.image("PragyanAI_Transperent.png", use_column_width=True)
+            st.image("PragyanAI_Transperent.png", use_container_width=True)
         except Exception:
             st.warning("Logo not found. Please add 'PragyanAI_Transperent.png' to the root directory.")
 
