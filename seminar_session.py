@@ -24,10 +24,10 @@ def seminar_session_main():
     """
     
     # Add logo at the top, consistent with other pages.
-    try:
-        st.image("PragyanAI_Transperent.png", width=400)
-    except Exception as e:
-        st.warning("Logo image not found. Please add 'PragyanAI_Transperent.png' to your project directory.")
+    #try:
+    #    st.image("PragyanAI_Transperent.png", width=400)
+    #except Exception as e:
+    #    st.warning("Logo image not found. Please add 'PragyanAI_Transperent.png' to your project directory.")
 
     st.title("Live Seminar Session")
 
