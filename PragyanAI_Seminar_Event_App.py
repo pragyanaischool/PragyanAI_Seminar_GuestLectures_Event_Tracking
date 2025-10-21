@@ -37,11 +37,17 @@ def load_dummy_data():
         'Password': ['test', 'lead', 'pending'],
         'Status': ['Approved', 'Approved', 'Not Approved'],
         'Role': ['Student', 'Lead', 'Student'],
-        # Adding other columns for structural consistency
-        'CollegeName': ['N/A'], 'Branch': ['N/A'], 'RollNO(UniversityRegNo)': ['N/A'],
-        'YearofPassing_Passed': ['N/A'], 'Phone(Whatsapp)': ['N/A'], 'Email': ['N/A'],
-        'Experience': ['N/A'], 'Brief_Presentor': ['N/A'], 'LinkedinProfile': ['N/A'],
-        'Github_Profile': ['N/A'], 'Area_of_Interest': ['N/A']
+        'CollegeName': ['N/A', 'N/A', 'N/A'],
+        'Branch': ['N/A', 'N/A', 'N/A'],
+        'RollNO(UniversityRegNo)': ['N/A', 'N/A', 'N/A'],
+        'YearofPassing_Passed': ['N/A', 'N/A', 'N/A'],
+        'Phone(Whatsapp)': ['N/A', 'N/A', 'N/A'],
+        'Email': ['test@example.com', 'lead@example.com', 'pending@example.com'],
+        'Experience': ['None', '5 Years', 'None'],
+        'Brief_Presentor': ['N/A', 'N/A', 'N/A'],
+        'LinkedinProfile': ['N/A', 'N/A', 'N/A'],
+        'Github_Profile': ['N/A', 'N/A', 'N/A'],
+        'Area_of_Interest': ['AI', 'ML', 'Web Dev']
     }
     users_df = pd.DataFrame(users_data)
     
@@ -51,12 +57,11 @@ def load_dummy_data():
 
 def main():
     """Main function to run the Streamlit app."""
-    # Display logo in a centered column
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         try:
             st.image("PragyanAI_Transperent.png", use_column_width=True)
-        except Exception as e:
+        except Exception:
             st.warning("Logo not found. Please add 'PragyanAI_Transperent.png' to the root directory.")
 
     if 'logged_in' not in st.session_state or not st.session_state.logged_in:
@@ -72,7 +77,14 @@ def main():
     db_connector = None
     
     if USE_DUMMY_DATA:
-        admins_df, users_df, admin_sheet, user_sheet = load_dummy_data()
+        # Initialize dummy data in session state if it doesn't exist
+        if 'dummy_admins_df' not in st.session_state:
+            st.session_state.dummy_admins_df, st.session_state.dummy_users_df, _, _ = load_dummy_data()
+        
+        admins_df = st.session_state.dummy_admins_df
+        users_df = st.session_state.dummy_users_df
+        admin_sheet = None
+        user_sheet = None
     else:
         try:
             db_connector = GoogleSheetsConnector()
@@ -82,7 +94,7 @@ def main():
             admins_df = db_connector.get_dataframe(admin_sheet)
             users_df = db_connector.get_dataframe(user_sheet)
         except Exception as e:
-            st.error(f"Failed to connect to the database. Please check secrets and sheet names. Error: {e}")
+            st.error(f"Failed to connect to the database. Check secrets and sheet names. Error: {e}")
             return
 
     if not st.session_state.logged_in:
@@ -181,10 +193,6 @@ def signup_form(db_connector, user_sheet, users_df):
         submit_button = st.form_submit_button("Sign Up")
 
         if submit_button:
-            if USE_DUMMY_DATA:
-                st.warning("Signup is disabled in Dummy Data Mode.")
-                return
-            
             required_fields = [full_name, email, phone_login, password, confirm_password]
             if not all(required_fields):
                 st.error("Please fill in all required fields marked with *.")
@@ -194,6 +202,28 @@ def signup_form(db_connector, user_sheet, users_df):
                 st.error("Passwords do not match.")
                 return
             
+            # --- MODIFIED: Handle signup in Dummy Data Mode ---
+            if USE_DUMMY_DATA:
+                if users_df is not None and not users_df.empty and phone_login.strip() in users_df['Phone(login)'].astype(str).str.strip().values:
+                    st.error("This phone number is already registered in the dummy data.")
+                    return
+                
+                new_user_record = {
+                    'FullName': [full_name], 'Phone(login)': [phone_login], 'Password': [password],
+                    'Status': ["Not Approved"], 'Role': ["Student"], 'CollegeName': [college or 'N/A'],
+                    'Branch': [branch or 'N/A'], 'RollNO(UniversityRegNo)': [reg_no or 'N/A'],
+                    'YearofPassing_Passed': [pass_year or 'N/A'], 'Phone(Whatsapp)': [phone_whatsapp or 'N/A'],
+                    'Email': [email], 'Experience': [experience or 'N/A'], 'Brief_Presentor': [brief_presenter or 'N/A'],
+                    'LinkedinProfile': [linkedin or 'N/A'], 'Github_Profile': [github or 'N/A'],
+                    'Area_of_Interest': [interest_area or 'N/A']
+                }
+                new_user_df = pd.DataFrame(new_user_record)
+                
+                st.session_state.dummy_users_df = pd.concat([st.session_state.dummy_users_df, new_user_df], ignore_index=True)
+                st.success("Dummy user registered successfully! The account is 'Not Approved' by default.")
+                return
+
+            # --- Live Data Signup Logic ---
             try:
                 if users_df is not None and not users_df.empty and phone_login.strip() in users_df['Phone(login)'].astype(str).str.strip().values:
                     st.error("This phone number is already registered.")
@@ -214,10 +244,7 @@ def menu(db_connector):
     st.sidebar.success(f"Welcome, {st.session_state.user_name}!")
     st.sidebar.write(f"Your Role: **{st.session_state.user_role}**")
     
-    page_options = {
-        "🏠 User Home": user_main,
-        "🎤 Live Session": seminar_session_main,
-    }
+    page_options = { "🏠 User Home": user_main, "🎤 Live Session": seminar_session_main }
 
     user_role = st.session_state.user_role
     if user_role == 'Admin':
@@ -227,21 +254,19 @@ def menu(db_connector):
         page_options["📝 Organizer Dashboard"] = organizer_main
 
     selection = st.sidebar.radio("Go to", list(page_options.keys()))
-    
     page_function = page_options[selection]
+    
     try:
         page_function(db_connector)
     except Exception as e:
         if USE_DUMMY_DATA:
              st.warning(f"Note: Some page features might be limited in Dummy Data Mode.")
-             # Attempt to run the page without the connector if it fails
              try:
                  page_function()
              except TypeError:
                  st.error(f"The page '{selection}' requires a live database connection and cannot run in Dummy Data Mode.")
         else:
             st.error(f"Error loading page '{selection}': {e}")
-
 
     if st.sidebar.button("Logout"):
         for key in list(st.session_state.keys()):
@@ -250,5 +275,4 @@ def menu(db_connector):
 
 if __name__ == "__main__":
     main()
-
 
