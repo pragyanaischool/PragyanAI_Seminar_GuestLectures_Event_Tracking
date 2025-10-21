@@ -98,7 +98,8 @@ def seminar_session_main(db_connector):
         with tab2:
             st.write("View or provide the presentation slides for this session.")
             # --- MODIFIED: Added a text box for manual URL entry for slides ---
-            slides_link_from_sheet = live_details.get('Sample_Presentation_Links', '')
+            #slides_link_from_sheet = live_details.get('Sample_Presentation_Links', '')
+            slides_link_from_sheet = live_details.get('PresentationLink', '')
             manual_slides_link = st.text_input(
                 "Slides URL:",
                 value=slides_link_from_sheet,
