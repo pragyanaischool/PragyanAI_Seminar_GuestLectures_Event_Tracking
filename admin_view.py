@@ -108,3 +108,4 @@ def admin_main():
                 st.info("No seminars are currently pending approval.")
         else:
             st.warning("To enable approvals, please add a 'Status' column to your Seminars Google Sheet.")
+
