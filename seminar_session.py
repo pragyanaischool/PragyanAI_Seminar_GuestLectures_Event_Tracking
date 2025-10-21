@@ -1,87 +1,104 @@
 import streamlit as st
 import pandas as pd
+from datetime import datetime
 
 def seminar_session_main(db_connector):
     """The main function for the Live Seminar Session page."""
-    st.header("🎤 Live Seminar Session")
+    st.header("🎤 Go to a Live Session")
 
     # Define constants for Google Sheets
     SEMINAR_SHEET_URL = "https://docs.google.com/spreadsheets/d/1EeuqOzuc90owGbTZTp7XNJObYkFc9gzbG_v-Mko78mc/edit?usp=sharing"
     SEMINAR_WORKSHEET_NAME = "Seminar_Guest_Event_List"
 
-    # --- Fetch Seminar Data ---
+    # --- Fetch and Filter Seminar Data ---
     try:
         seminar_sheet = db_connector.get_worksheet(SEMINAR_SHEET_URL, SEMINAR_WORKSHEET_NAME)
         if seminar_sheet:
             seminars_df = db_connector.get_dataframe(seminar_sheet)
+            # Filter for upcoming events
+            seminars_df['Event_Date'] = pd.to_datetime(seminars_df['Event_Date'], errors='coerce')
+            today = datetime.now().normalize()
+            upcoming_seminars_df = seminars_df[seminars_df['Event_Date'] >= today].copy()
+            upcoming_seminars_df.sort_values(by='Event_Date', inplace=True)
         else:
             st.error("Could not connect to the seminar list.")
-            seminars_df = pd.DataFrame() # Create empty dataframe on failure
+            upcoming_seminars_df = pd.DataFrame()
     except Exception as e:
         st.error(f"An error occurred while fetching seminar data: {e}")
-        seminars_df = pd.DataFrame()
+        upcoming_seminars_df = pd.DataFrame()
 
-    # Get the selected seminar title from the session state
-    selected_seminar_title = st.session_state.get('selected_seminar_title', None)
-
-    if not selected_seminar_title:
-        st.warning("Please select a seminar from the 'User Home' page first to view its details.")
+    if upcoming_seminars_df.empty:
+        st.info("There are no current or upcoming seminar events.")
         return
 
-    # Find the details of the selected seminar
-    if not seminars_df.empty:
-        seminar_details = seminars_df[seminars_df['Seminar_Event_Name'] == selected_seminar_title]
-        if not seminar_details.empty:
-            seminar_details = seminar_details.iloc[0]
-        else:
-            st.error(f"Details for '{selected_seminar_title}' could not be found.")
-            return
-    else:
-        st.error("Seminar data is not available.")
-        return
+    # --- Step 1: Select a Seminar Event ---
+    st.subheader("Step 1: Select a Seminar")
+    event_options = upcoming_seminars_df['Seminar_Event_Name'].tolist()
+    selected_event_name = st.selectbox("Choose an event:", options=["-- Select an Event --"] + event_options)
+
+    seminar_details = None
+    presenters_df = pd.DataFrame()
+
+    if selected_event_name != "-- Select an Event --":
+        seminar_details = upcoming_seminars_df[upcoming_seminars_df['Seminar_Event_Name'] == selected_event_name].iloc[0]
+        
+        # --- Fetch Presenter Data for the selected event ---
+        enrollment_sheet_link = seminar_details.get('Seminar_GuestLecture_Sheet_Link')
+        if enrollment_sheet_link:
+            try:
+                enrollment_ws = db_connector.get_worksheet(enrollment_sheet_link, "Seminar_GuestLecture_List")
+                if enrollment_ws:
+                    presenters_df = db_connector.get_dataframe(enrollment_ws)
+            except Exception:
+                st.warning("Could not fetch presenter list for this event. The enrollment sheet might be missing or incorrectly named.")
+
+    # --- Step 2: Select a Presenter ---
+    selected_presenter = None
+    if seminar_details is not None and not presenters_df.empty:
+        st.subheader("Step 2: Select a Presenter")
+        presenter_options = presenters_df['Presentor_FullName'].tolist() if 'Presentor_FullName' in presenters_df.columns else []
+        selected_presenter = st.selectbox("Choose a presenter:", options=["-- Select a Presenter --"] + presenter_options)
+
+    # --- Step 3: Go to Live Session Button ---
+    if selected_presenter and selected_presenter != "-- Select a Presenter --":
+        if st.button("🚀 Go to Live Session", use_container_width=True, type="primary"):
+            st.session_state['show_live_session'] = True
+            st.session_state['live_session_details'] = seminar_details.to_dict()
+            st.rerun() # Rerun to display the session view
     
-    st.subheader(f"Now Viewing: {selected_seminar_title}")
+    # --- Display the Live Session View if triggered ---
+    if st.session_state.get('show_live_session', False):
+        live_details = st.session_state.get('live_session_details', {})
+        st.success(f"Now Viewing: {live_details.get('Seminar_Event_Name')}")
 
-    # --- Tabbed Interface ---
-    tab1, tab2, tab3 = st.tabs(["▶️ Live Session", "🖼️ Slide View", "❓ Q&A"])
+        tab1, tab2, tab3 = st.tabs(["▶️ Live Session", "🖼️ Slide View", "❓ Q&A"])
 
-    with tab1:
-        st.write("Join the live session using the link below.")
-        meet_link = seminar_details.get('Meet_session_Link')
-        if meet_link:
-            # The st.link_button is a clear and effective way to link to external sites
-            st.link_button("🚀 Launch Live Seminar (Opens in New Tab)", meet_link, use_container_width=True)
-        else:
-            st.info("The Google Meet link for this session has not been provided yet.")
+        with tab1:
+            st.write("Join the live session using the link below.")
+            meet_link = live_details.get('Meet_session_Link')
+            if meet_link:
+                st.link_button("Launch Live Seminar (Opens in New Tab)", meet_link, use_container_width=True)
+            else:
+                st.info("The Google Meet link for this session has not been provided yet.")
 
-    with tab2:
-        st.write("View the presentation slides for this session.")
-        slides_link = seminar_details.get('Seminar_GuestLecture_Sheet_Link') # Assuming this column holds the slides link
+        with tab2:
+            st.write("View the presentation slides for this session.")
+            slides_link = live_details.get('Sample_Presentation_Links') # Correct column for slides
+            if slides_link and "docs.google.com/presentation" in slides_link:
+                embed_url = slides_link.replace("/edit", "/embed?start=false&loop=false&delayms=3000")
+                st.components.v1.iframe(embed_url, height=480)
+            else:
+                st.info("The Google Slides link for this session has not been provided or is invalid.")
         
-        if slides_link and "docs.google.com/presentation" in slides_link:
-            # Construct an embeddable URL for Google Slides
-            embed_url = slides_link.replace("/edit", "/embed?start=false&loop=false&delayms=3000")
-            st.components.v1.iframe(embed_url, height=480)
-        else:
-            st.info("The Google Slides link for this session has not been provided or is invalid.")
+        with tab3:
+            st.subheader("Ask a Question")
+            with st.form("qa_form", clear_on_submit=True):
+                slide_number = st.text_input("Relevant Slide Number (if any)")
+                question_text = st.text_area("Your Question *")
+                ask_target = st.radio("Ask To:", ("Presenter", "AI Assistant (Llama-3)"), horizontal=True)
+                submit_question = st.form_submit_button("Submit Question")
 
-    with tab3:
-        st.subheader("Ask a Question")
-        st.write("Submit your questions to the presenter or our AI assistant.")
-        
-        with st.form("qa_form", clear_on_submit=True):
-            slide_number = st.text_input("Relevant Slide Number (if any)")
-            question_text = st.text_area("Your Question *")
-            ask_target = st.radio("Ask To:", ("Presenter", "AI Assistant (Llama-3)"), horizontal=True)
-            
-            submit_question = st.form_submit_button("Submit Question")
-
-            if submit_question:
-                if not question_text:
-                    st.warning("Please enter a question.")
-                else:
-                    # In a real app, you would save this question to a database
+                if submit_question and question_text:
                     st.success(f"Your question has been submitted to the {ask_target}!")
-                    st.write(f"**Your Question:** {question_text}")
-                    if slide_number:
-                        st.write(f"**Regarding Slide:** {slide_number}")
+                elif submit_question:
+                    st.warning("Please enter a question.")
