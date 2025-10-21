@@ -21,7 +21,7 @@ def main():
     with col2:
         try:
             # use_column_width=True makes the image responsive to the column width
-            st.image("PragyanAI_Transperent.png", use_column_width=True)
+            st.image("PragyanAI_Transperent.png", use_container_width=True)
         except Exception as e:
             st.warning(f"Logo not found. Please add 'PragyanAI_Transperent.png' to the root directory.")
 
