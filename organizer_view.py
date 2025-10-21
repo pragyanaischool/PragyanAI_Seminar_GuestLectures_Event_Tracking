@@ -77,7 +77,8 @@ def organizer_main(db_connector):
                         st.session_state.user_name      # Organizer_Name
                     ]
                     try:
-                        db_connector.append_record(seminar_sheet, new_seminar_data)
+                        # MODIFIED: Changed append_record to append_row
+                        db_connector.append_row(seminar_sheet, new_seminar_data)
                         st.success(f"Successfully submitted '{event_name}' for approval!")
                     except Exception as e:
                         st.error(f"An error occurred while creating the event: {e}")
@@ -170,4 +171,3 @@ def organizer_main(db_connector):
                         st.error(f"Could not access or read the linked enrollment sheet. Please check the URL and permissions. Error: {e}")
         else:
             st.info("You have no events to view candidates for.")
-            
