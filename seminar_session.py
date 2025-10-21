@@ -110,7 +110,7 @@ def seminar_session_main(db_connector):
                         #st.write(live_presenter, enrollment_df['Presentor_FullName'] )
                         
                         if not presenter_row.empty:
-                            for i in range(len(presenter_row):
+                            for i in range(len(presenter_row)):
                                 slides_link_from_sheet = presenter_row.iloc[i].get('PresentationLink', '')
                                 st.write(slides_link_from_sheet )
                 except Exception:
