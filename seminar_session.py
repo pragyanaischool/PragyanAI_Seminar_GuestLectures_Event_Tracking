@@ -8,6 +8,10 @@ def seminar_session_main(db_connector):
 
     # --- Add a refresh button ---
     if st.button("🔄 Refresh Events List"):
+        # Clear session state related to the session view to reset the page
+        st.session_state.pop('show_live_session', None)
+        st.session_state.pop('live_session_details', None)
+        st.session_state.pop('live_session_presenter', None)
         st.rerun()
 
     # Define constants for Google Sheets
@@ -19,7 +23,6 @@ def seminar_session_main(db_connector):
         seminar_sheet = db_connector.get_worksheet(SEMINAR_SHEET_URL, SEMINAR_WORKSHEET_NAME)
         if seminar_sheet:
             seminars_df = db_connector.get_dataframe(seminar_sheet)
-            # Filter for upcoming events
             seminars_df['Event_Date'] = pd.to_datetime(seminars_df['Event_Date'], errors='coerce')
             today = pd.to_datetime(datetime.now().date())
             upcoming_seminars_df = seminars_df[seminars_df['Event_Date'] >= today].copy()
@@ -31,51 +34,50 @@ def seminar_session_main(db_connector):
         st.error(f"An error occurred while fetching seminar data: {e}")
         upcoming_seminars_df = pd.DataFrame()
 
-    if upcoming_seminars_df.empty:
-        st.info("There are no current or upcoming seminar events.")
-        return
+    # --- Selection Logic (only show if not in a live session view) ---
+    if not st.session_state.get('show_live_session', False):
+        if upcoming_seminars_df.empty:
+            st.info("There are no current or upcoming seminar events.")
+            return
 
-    # --- Step 1: Select a Seminar Event ---
-    st.subheader("Step 1: Select a Seminar")
-    event_options = upcoming_seminars_df['Seminar_Event_Name'].tolist()
-    selected_event_name = st.selectbox("Choose an event:", options=["-- Select an Event --"] + event_options)
+        st.subheader("Step 1: Select a Seminar")
+        event_options = upcoming_seminars_df['Seminar_Event_Name'].tolist()
+        selected_event_name = st.selectbox("Choose an event:", options=["-- Select an Event --"] + event_options)
 
-    seminar_details = None
-    presenters_df = pd.DataFrame()
+        seminar_details = None
+        presenters_df = pd.DataFrame()
 
-    if selected_event_name != "-- Select an Event --":
-        seminar_details = upcoming_seminars_df[upcoming_seminars_df['Seminar_Event_Name'] == selected_event_name].iloc[0]
-        
-        # --- Fetch Presenter Data for the selected event ---
-        enrollment_sheet_link = seminar_details.get('Seminar_GuestLecture_Sheet_Link')
-        if enrollment_sheet_link:
-            try:
-                enrollment_ws = db_connector.get_worksheet(enrollment_sheet_link, "Seminar_GuestLecture_List")
-                if enrollment_ws:
-                    presenters_df = db_connector.get_dataframe(enrollment_ws)
-            except Exception:
-                st.warning("Could not fetch presenter list for this event. The enrollment sheet might be missing or incorrectly named.")
+        if selected_event_name != "-- Select an Event --":
+            seminar_details = upcoming_seminars_df[upcoming_seminars_df['Seminar_Event_Name'] == selected_event_name].iloc[0]
+            enrollment_sheet_link = seminar_details.get('Seminar_GuestLecture_Sheet_Link')
+            if enrollment_sheet_link:
+                try:
+                    enrollment_ws = db_connector.get_worksheet(enrollment_sheet_link, "Seminar_GuestLecture_List")
+                    if enrollment_ws:
+                        presenters_df = db_connector.get_dataframe(enrollment_ws)
+                except Exception:
+                    st.warning("Could not fetch presenter list for this event.")
 
-    # --- Step 2: Select a Presenter ---
-    selected_presenter = None
-    if seminar_details is not None and not presenters_df.empty:
-        st.subheader("Step 2: Select a Presenter")
-        presenter_options = presenters_df['Presentor_FullName'].tolist() if 'Presentor_FullName' in presenters_df.columns else []
-        selected_presenter = st.selectbox("Choose a presenter:", options=["-- Select a Presenter --"] + presenter_options)
+        selected_presenter = None
+        if seminar_details is not None and not presenters_df.empty:
+            st.subheader("Step 2: Select a Presenter")
+            presenter_options = presenters_df['Presentor_FullName'].tolist() if 'Presentor_FullName' in presenters_df.columns else []
+            selected_presenter = st.selectbox("Choose a presenter:", options=["-- Select a Presenter --"] + presenter_options)
 
-    # --- Step 3: Go to Live Session Button ---
-    if selected_presenter and selected_presenter != "-- Select a Presenter --":
-        if st.button("🚀 Go to Live Session", use_container_width=True, type="primary"):
-            st.session_state['show_live_session'] = True
-            st.session_state['live_session_details'] = seminar_details.to_dict()
-            st.rerun() # Rerun to display the session view
+        if selected_presenter and selected_presenter != "-- Select a Presenter --":
+            if st.button("🚀 Go to Live Session", use_container_width=True, type="primary"):
+                st.session_state['show_live_session'] = True
+                st.session_state['live_session_details'] = seminar_details.to_dict()
+                st.session_state['live_session_presenter'] = selected_presenter # Store the selected presenter
+                st.rerun()
     
     # --- Display the Live Session View if triggered ---
     if st.session_state.get('show_live_session', False):
         live_details = st.session_state.get('live_session_details', {})
-        st.success(f"Now Viewing: {live_details.get('Seminar_Event_Name')}")
+        live_presenter = st.session_state.get('live_session_presenter', '')
+        
+        st.success(f"Now Viewing: {live_details.get('Seminar_Event_Name')} with {live_presenter}")
 
-        # --- MODIFIED: Added a refresh button specific to the session view ---
         if st.button("🔄 Refresh Session Info"):
             st.rerun()
 
@@ -84,33 +86,35 @@ def seminar_session_main(db_connector):
         with tab1:
             st.write("Join the live session using the link below.")
             meet_link_from_sheet = live_details.get('Meet_session_Link', '')
-            manual_meet_link = st.text_input(
-                "Meeting URL:", 
-                value=meet_link_from_sheet,
-                placeholder="Paste the meeting URL here if not pre-filled"
-            )
-
+            manual_meet_link = st.text_input("Meeting URL:", value=meet_link_from_sheet, placeholder="Paste the meeting URL here if not pre-filled")
             if manual_meet_link:
                 st.link_button("🚀 Launch Live Seminar (Opens in New Tab)", manual_meet_link, use_container_width=True)
             else:
-                st.info("The meeting link for this session has not been provided. Please paste it above to launch.")
+                st.info("The meeting link for this session has not been provided.")
 
         with tab2:
             st.write("View or provide the presentation slides for this session.")
-            # --- MODIFIED: Added a text box for manual URL entry for slides ---
-            #slides_link_from_sheet = live_details.get('Sample_Presentation_Links', '')
-            slides_link_from_sheet = live_details.get('PresentationLink', '')
-            manual_slides_link = st.text_input(
-                "Slides URL:",
-                value=slides_link_from_sheet,
-                placeholder="Paste the Google Slides URL here"
-            )
+            
+            # --- MODIFIED: Logic to fetch the specific presenter's slide link ---
+            slides_link_from_sheet = ''
+            enrollment_link = live_details.get('Seminar_GuestLecture_Sheet_Link')
+            if enrollment_link:
+                try:
+                    enrollment_ws = db_connector.get_worksheet(enrollment_link, "Seminar_GuestLecture_List")
+                    if enrollment_ws:
+                        enrollment_df = db_connector.get_dataframe(enrollment_ws)
+                        presenter_row = enrollment_df[enrollment_df['Presentor_FullName'] == live_presenter]
+                        if not presenter_row.empty:
+                            slides_link_from_sheet = presenter_row.iloc[0].get('PresentationLink', '')
+                except Exception:
+                    st.warning("Could not automatically retrieve the presentation link.")
 
+            manual_slides_link = st.text_input("Slides URL:", value=slides_link_from_sheet, placeholder="Paste the Google Slides URL here")
             if manual_slides_link and "docs.google.com/presentation" in manual_slides_link:
                 embed_url = manual_slides_link.replace("/edit", "/embed?start=false&loop=false&delayms=3000")
                 st.components.v1.iframe(embed_url, height=480)
             else:
-                st.info("A valid Google Slides link has not been provided. Please paste it above to view.")
+                st.info("A valid Google Slides link has not been provided.")
         
         with tab3:
             st.subheader("Ask a Question")
@@ -119,7 +123,6 @@ def seminar_session_main(db_connector):
                 question_text = st.text_area("Your Question *")
                 ask_target = st.radio("Ask To:", ("Presenter", "AI Assistant (Llama-3)"), horizontal=True)
                 submit_question = st.form_submit_button("Submit Question")
-
                 if submit_question and question_text:
                     st.success(f"Your question has been submitted to the {ask_target}!")
                 elif submit_question:
