@@ -107,10 +107,12 @@ def seminar_session_main(db_connector):
                         enrollment_df = db_connector.get_dataframe(enrollment_ws)
                         #st.write(enrollment_df.head())
                         presenter_row = enrollment_df[enrollment_df['Presentor_FullName'] == live_presenter]
-                        st.write(live_presenter, enrollment_df['Presentor_FullName'] )
-                        st.info(f"Debugging: presenter_row: {presenter_row}")
+                        #st.write(live_presenter, enrollment_df['Presentor_FullName'] )
+                        
                         if not presenter_row.empty:
-                            slides_link_from_sheet = presenter_row.iloc[0].get('PresentationLink', '')
+                            for i in range(len(presenter_row):
+                                slides_link_from_sheet = presenter_row.iloc[i].get('PresentationLink', '')
+                                st.write(slides_link_from_sheet )
                 except Exception:
                     st.warning("Could not automatically retrieve the presentation link.")
 
