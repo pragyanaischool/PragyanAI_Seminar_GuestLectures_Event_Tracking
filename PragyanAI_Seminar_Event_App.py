@@ -25,7 +25,9 @@ def main():
         except Exception as e:
             st.warning(f"Logo not found. Please add 'PragyanAI_Transperent.png' to the root directory.")
 
-    st.title("Guest Lecture and Seminar Platform")
+    # Only show the main title on the login page
+    if 'logged_in' not in st.session_state or not st.session_state.logged_in:
+        st.title("Guest Lecture and Seminar Platform")
 
     # Initialize session state variables
     if 'logged_in' not in st.session_state:
@@ -211,8 +213,9 @@ def menu(db_connector):
     user_role = st.session_state.user_role
     if user_role == 'Admin':
         page_options["👑 Admin Dashboard"] = admin_main
-    # If a user is a 'Lead', they are also an 'Organizer'
-    if user_role in ['Organizer', 'Lead']:
+        # Add Organizer and User views to the Admin's sidebar for easy access
+        page_options["📝 Organizer Dashboard"] = organizer_main
+    elif user_role in ['Organizer', 'Lead']:
         page_options["📝 Organizer Dashboard"] = organizer_main
 
     selection = st.sidebar.radio("Go to", list(page_options.keys()))
@@ -235,5 +238,4 @@ def menu(db_connector):
 # --- Entry point of the app ---
 if __name__ == "__main__":
     main()
-    
 
