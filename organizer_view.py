@@ -45,12 +45,12 @@ def organizer_main(db_connector):
         with st.form(key="create_seminar_form", clear_on_submit=True):
             st.write("Fill in the details below. This will add your name as the organizer and submit the event for admin approval.")
             
-            event_name = st.text_input("Seminar Event Title *")
+            event_name = st.text_input("Seminar Title *")
             event_date = st.date_input("Date of Event *", min_value=datetime.today())
             domain = st.text_input("Domain / Category *")
             description = st.text_area("Brief Description *")
             meet_link = st.text_input("Google Meet / Session Link")
-            presentation_link = st.text_input("Google Slides / Presentation Link")
+            evaluation_form_link = st.text_input("Seminar Evaluation Google Form Link")
             
             submit_button = st.form_submit_button(label="Submit for Approval")
 
@@ -60,9 +60,21 @@ def organizer_main(db_connector):
                 else:
                     # Append the current user's name as the Organizer_Name
                     new_seminar_data = [
-                        event_date.strftime("%Y-%m-%d"), event_name, domain, description,
-                        "", "Not Approved", "Upcoming", "", meet_link, presentation_link,
-                        "", "", "", "", st.session_state.user_name
+                        event_date.strftime("%Y-%m-%d"), # Event_Date
+                        event_name,                     # Seminar_Event_Name
+                        domain,                         # Domain
+                        description,                    # BriefDescription
+                        "",                             # URL(Outside)
+                        "Not Approved",                 # Approved_Status
+                        "Upcoming",                     # Conducted_State
+                        "",                             # WhatsappLink
+                        meet_link,                      # Meet_session_Link
+                        "",                             # Seminar_GuestLecture_Sheet_Link (Presentation)
+                        evaluation_form_link,           # Seminar Evaluation-GoogleFormLink
+                        "",                             # Sample_Presentation_Links
+                        "",                             # Sample_Project_Code_Github_Links
+                        "",                             # Sample_Project_Demo_YouTube_Links
+                        st.session_state.user_name      # Organizer_Name
                     ]
                     try:
                         db_connector.append_record(seminar_sheet, new_seminar_data)
