@@ -14,7 +14,7 @@ st.set_page_config(
 )
 
 # --- [TOGGLE] Set to True to use local dummy data, False to use live Google Sheets data ---
-USE_DUMMY_DATA = True
+USE_DUMMY_DATA = False
 # -----------------------------------------------------------------------------------------
 
 
