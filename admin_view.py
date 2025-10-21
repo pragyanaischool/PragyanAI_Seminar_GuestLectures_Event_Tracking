@@ -10,12 +10,12 @@ def admin_main(db_connector):
 
     # --- Define constants for Google Sheets ---
     USER_SHEET_URL = "https://docs.google.com/spreadsheets/d/1nJq-DCS-bGMqtaVvU9VImWhOEet5uuL-uQHcMKBgSss/edit?usp=sharing"
+    #SEMINAR_SHEET_URL = "https://docs.google.com/spreadsheets/d/1EeuqOzuc90owGbTZTp7XNJObYkFc9gzbG_v-Mko78mc/edit?usp=sharing"
     SEMINAR_SHEET_URL = "https://docs.google.com/spreadsheets/d/1EeuqOzuc90owGbTZTp7XNJObYkFc9gzbG_v-Mko78mc/edit?usp=sharing"
-    
     USER_WORKSHEET_NAME = "Users"
     # Updated to match the user's provided sheet name
+    #SEMINAR_WORKSHEET_NAME = "Seminar_Guest_Event_List"
     SEMINAR_WORKSHEET_NAME = "Seminar_Guest_Event_List"
-
     # --- Data Loading and Caching ---
     @st.cache_data(ttl=60) # Cache for 1 minute to keep data fresh
     def load_data():
