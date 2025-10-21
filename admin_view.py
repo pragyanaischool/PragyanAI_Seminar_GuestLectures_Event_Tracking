@@ -33,35 +33,18 @@ def admin_main(db_connector):
     users_df, seminars_df, user_sheet, seminar_sheet = load_data()
 
     # --- Tabbed Interface ---
-    stats_tab, user_approval_tab, all_users_tab, seminar_list_tab = st.tabs([
-        "📊 Statistics", "⏳ User Approvals", "👥 All Users", "🗓️ Seminar Management"
+    all_users_tab, user_approval_tab, seminar_list_tab, seminar_approval_tab, seminar_update_tab = st.tabs([
+        "👥 All Users", "⏳ Users for Approvals", "🗓️ All Seminar Events", "⏳ Seminars for Approvals", "✍️ Update Seminar Info"
     ])
 
-    # --- Statistics Tab ---
-    with stats_tab:
-        st.subheader("Platform Statistics")
-        if not users_df.empty and not seminars_df.empty:
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Total Registered Users", len(users_df))
-            col2.metric("Total Seminars Planned", len(seminars_df))
-
-            try:
-                # Convert 'Event Date' to datetime, coercing errors to NaT (Not a Time)
-                seminars_df['Event Date DT'] = pd.to_datetime(seminars_df['Event Date'], errors='coerce')
-                
-                # Filter out rows where date conversion failed
-                valid_seminars = seminars_df.dropna(subset=['Event Date DT'])
-                
-                upcoming_seminars = valid_seminars[valid_seminars['Event Date DT'] >= datetime.now()]
-                col3.metric("Upcoming Seminars", len(upcoming_seminars))
-            except KeyError:
-                st.warning("'Event Date' column not found in the Seminar Events sheet. Cannot calculate upcoming seminars.")
-            except Exception as e:
-                st.error(f"An error occurred while calculating statistics: {e}")
-
+    # --- All Users Tab ---
+    with all_users_tab:
+        st.subheader("Full User List")
+        if not users_df.empty:
+            st.dataframe(users_df, use_container_width=True)
         else:
-            st.warning("Could not load user or seminar data to display statistics.")
-    
+            st.warning("Could not load user data.")
+            
     # --- User Approval Tab ---
     with user_approval_tab:
         st.subheader("Users Waiting for Approval")
@@ -97,40 +80,84 @@ def admin_main(db_connector):
         else:
             st.warning("Could not load user data to check for approvals.")
 
-    # --- All Users Tab ---
-    with all_users_tab:
-        st.subheader("Full User List")
-        if not users_df.empty:
-            st.dataframe(users_df, use_container_width=True)
-        else:
-            st.warning("Could not load user data.")
-            
     # --- All Seminars Tab ---
     with seminar_list_tab:
-        st.subheader("Full Seminar List & Link Editor")
-        st.info("You can edit the seminar links directly in the table below. The Google Sheet will be updated after you finish editing.")
-        if seminar_sheet and not seminars_df.empty:
-            # Drop the helper datetime column if it exists before displaying
-            seminars_to_edit = seminars_df.drop(columns=['Event Date DT'], errors='ignore')
-            
-            with st.form("seminar_edit_form"):
-                edited_seminars_df = st.data_editor(
-                    seminars_to_edit,
-                    num_rows="dynamic",
-                    use_container_width=True,
-                    key="seminar_editor"
-                )
-                
-                if st.form_submit_button("Save Changes to Google Sheet"):
-                    try:
-                        # Overwrite the entire sheet with the updated dataframe
-                        db_connector.update_worksheet_with_dataframe(seminar_sheet, edited_seminars_df)
-                        st.success("Seminar list updated successfully in Google Sheets!")
-                        st.cache_data.clear()
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Failed to save changes to Google Sheets: {e}")
+        st.subheader("Full Seminar List")
+        if not seminars_df.empty:
+            st.dataframe(seminars_df, use_container_width=True)
         else:
             st.warning("Could not load seminar data.")
-            
 
+    # --- Seminar Approvals Tab ---
+    with seminar_approval_tab:
+        st.subheader("Seminars Waiting for Approval")
+        st.warning("Feature in development. To enable seminar approvals, please add a 'Status' column to your 'Seminar Events' Google Sheet.", icon="⚠️")
+        # Placeholder for future functionality
+        # if not seminars_df.empty and 'Status' in seminars_df.columns:
+        #     ... # Approval logic here
+        # else:
+        #     st.info("Seminar approval feature requires a 'Status' column in the sheet.")
+
+
+    # --- Update Seminar Info Tab ---
+    with seminar_update_tab:
+        st.subheader("Select a Seminar to Update")
+        if seminar_sheet and not seminars_df.empty and 'Seminar Event Topic' in seminars_df.columns:
+            
+            # Use a unique key for the selectbox to avoid state issues
+            seminar_topics = seminars_df['Seminar Event Topic'].tolist()
+            selected_topic = st.selectbox(
+                "Choose a seminar:",
+                options=seminar_topics,
+                index=None, # No default selection
+                placeholder="Select a seminar event...",
+                key="seminar_update_select"
+            )
+
+            if selected_topic:
+                # Get the full record for the selected seminar
+                seminar_data = seminars_df[seminars_df['Seminar Event Topic'] == selected_topic].iloc[0]
+                
+                st.markdown(f"### Editing: **{selected_topic}**")
+                
+                with st.form(key="update_seminar_form"):
+                    
+                    # Create a dictionary to hold the updated data
+                    updated_values = {}
+                    
+                    # Dynamically create text inputs for each column
+                    for col_name in seminars_df.columns:
+                        updated_values[col_name] = st.text_input(
+                            f"{col_name}",
+                            value=str(seminar_data.get(col_name, ""))
+                        )
+
+                    submit_button = st.form_submit_button("Update Seminar Details")
+
+                    if submit_button:
+                        try:
+                            # Find the row in the sheet using the unique Seminar Event Topic
+                            cell = seminar_sheet.find(selected_topic)
+                            
+                            if not cell:
+                                st.error(f"Could not find the seminar '{selected_topic}' in the sheet to update.")
+                                return
+
+                            sheet_row_number = cell.row
+                            
+                            # Convert dictionary values to a list in the correct order
+                            new_row_data = [updated_values[col] for col in seminars_df.columns]
+                            
+                            # Update the specific row in the Google Sheet
+                            seminar_sheet.update(f"A{sheet_row_number}", [new_row_data])
+                            
+                            st.success(f"Successfully updated '{selected_topic}'!")
+                            st.cache_data.clear() # Clear cache to fetch new data
+                            st.rerun()
+
+                        except gspread.exceptions.CellNotFound:
+                            st.error(f"Could not find the seminar '{selected_topic}' in the sheet to update.")
+                        except Exception as e:
+                            st.error(f"An error occurred while updating the seminar: {e}")
+        else:
+            st.warning("Could not load seminar data or 'Seminar Event Topic' column not found.")
