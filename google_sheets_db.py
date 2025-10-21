@@ -101,4 +101,3 @@ def update_user_data(worksheet, phone_number, column_name, new_value):
     except Exception as e:
         st.error(f"An error occurred while updating the sheet: {e}")
         return False
-
