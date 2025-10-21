@@ -45,7 +45,7 @@ def organizer_main(db_connector):
         with st.form(key="create_seminar_form", clear_on_submit=True):
             st.write("Fill in the details below. This will add your name as the organizer and submit the event for admin approval.")
             
-            event_name = st.text_input("Seminar Title *")
+            event_name = st.text_input("Seminar Event Title *")
             event_date = st.date_input("Date of Event *", min_value=datetime.today())
             domain = st.text_input("Domain / Category *")
             description = st.text_area("Brief Description *")
