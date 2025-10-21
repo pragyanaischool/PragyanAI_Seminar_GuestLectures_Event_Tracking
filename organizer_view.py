@@ -141,10 +141,10 @@ def organizer_main(db_connector):
         if seminar_sheet:
             seminars_df = db_connector.get_dataframe(seminar_sheet)
             if not seminars_df.empty and 'Organizer_Name' in seminars_df.columns and 'Approved_Status' in seminars_df.columns:
-                # --- MODIFIED: Filter for approved events created by the current organizer ---
+                # --- MODIFIED: Filter logic to check for 'Yes' instead of 'Approved' ---
                 approved_organizer_events = seminars_df[
                     (seminars_df['Organizer_Name'] == st.session_state.user_name) &
-                    (seminars_df['Approved_Status'] == 'Approved')
+                    (seminars_df['Approved_Status'] == 'Yes')
                 ]
                 if not approved_organizer_events.empty:
                     event_to_view = st.selectbox(
