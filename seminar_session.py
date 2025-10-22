@@ -178,6 +178,8 @@ def seminar_session_main(db_connector):
             st.session_state.question_index = 0
             st.session_state.show_feedback = False
             st.session_state.user_answer = None
+            st.session_state.score_correct = 0  # NEW: Score tracking
+            st.session_state.score_wrong = 0    # NEW: Score tracking
 
 
         # --- Tabbed Interface ---
@@ -289,6 +291,16 @@ def seminar_session_main(db_connector):
             # --- 2. QUIZ LOGIC ---
             st.markdown("##### 📝 In-Session Quizzes")
             
+            # --- NEW RESET BUTTON for debugging ---
+            if st.session_state.current_quiz_title and st.button("End Current Quiz / Reset State"):
+                st.session_state.current_quiz_title = None
+                st.session_state.question_index = 0
+                st.session_state.show_feedback = False
+                st.session_state.quiz_df = pd.DataFrame()
+                st.session_state.score_correct = 0
+                st.session_state.score_wrong = 0
+                st.rerun()
+
             if is_quizz_available.upper() == 'YES' and quiz_list_link_from_sheet:
                 st.success("Quizzes are available for this session! Test your knowledge.")
                 
@@ -303,11 +315,13 @@ def seminar_session_main(db_connector):
                     
                     if selected_quiz_title != "-- Select a Quiz --":
                         if st.session_state.current_quiz_title != selected_quiz_title:
-                            # New quiz selected, reset the state
+                            # New quiz selected, reset the state and scores
                             st.session_state.current_quiz_title = selected_quiz_title
                             st.session_state.question_index = 0
                             st.session_state.show_feedback = False
                             st.session_state.quiz_df = pd.DataFrame() # Clear old data
+                            st.session_state.score_correct = 0
+                            st.session_state.score_wrong = 0
                             
                             # Load the selected quiz data
                             try:
@@ -315,7 +329,8 @@ def seminar_session_main(db_connector):
                                 st.session_state.quiz_df = db_connector.get_dataframe(quiz_ws)
                                 
                                 # Validation: Ensure required columns are present
-                                required_cols = ['Question', 'Option A', 'Option B', 'Option C', 'Option D', 'Correct Answer', 'Explanation']
+                                # MODIFIED: Added Option E and updated 'Correct Answer' to 'Answer'
+                                required_cols = ['Question', 'Option A', 'Option B', 'Option C', 'Option D', 'Option E', 'Answer', 'Explanation']
                                 if not all(col in st.session_state.quiz_df.columns for col in required_cols):
                                     st.error(f"Quiz sheet '{selected_quiz_title}' is missing required columns. Must have: {', '.join(required_cols)}.")
                                     st.session_state.current_quiz_title = None # Invalidate selection
@@ -337,12 +352,13 @@ def seminar_session_main(db_connector):
                                 
                                 st.markdown(f"**Question {q_idx + 1} of {len(quiz_df)}:** {current_q['Question']}")
                                 
-                                # Options
+                                # Options Generation (up to Option E)
                                 options = {
                                     'A': current_q.get('Option A'),
                                     'B': current_q.get('Option B'),
                                     'C': current_q.get('Option C'),
-                                    'D': current_q.get('Option D')
+                                    'D': current_q.get('Option D'),
+                                    'E': current_q.get('Option E') # NEW
                                 }
                                 valid_options = [f"{key}. {value}" for key, value in options.items() if value]
                                 
@@ -351,15 +367,27 @@ def seminar_session_main(db_connector):
                                     submit_answer = st.form_submit_button("Submit Answer")
                                     
                                 if submit_answer:
-                                    # Extract just the letter (A, B, C, D) from the user's selection
+                                    # Extract just the letter (A, B, C, D, E) from the user's selection
                                     st.session_state.user_answer = user_choice.split('.')[0].strip()
                                     st.session_state.show_feedback = True
-                                    st.rerun() # Rerun to show feedback
+                                    # The rerun is needed to display feedback section
+                                    st.rerun() 
                                     
                                 # --- FEEDBACK DISPLAY ---
                                 if st.session_state.show_feedback:
-                                    correct_answer_letter = current_q['Correct Answer'].strip().upper()
+                                    # MODIFIED: Check against 'Answer' column
+                                    correct_answer_letter = current_q['Answer'].strip().upper() 
                                     is_correct = st.session_state.user_answer == correct_answer_letter
+                                    
+                                    # --- SCORING UPDATE (Ensure it runs only once per question) ---
+                                    # We use 'scored_q' to ensure Streamlit reruns don't double-score
+                                    if st.session_state.get('scored_q') != q_idx:
+                                        if is_correct:
+                                            st.session_state.score_correct += 1
+                                        else:
+                                            st.session_state.score_wrong += 1
+                                        st.session_state.scored_q = q_idx # Mark question as scored
+                                    # --- END SCORING UPDATE ---
                                     
                                     # Display feedback message
                                     if is_correct:
@@ -376,17 +404,28 @@ def seminar_session_main(db_connector):
                                         st.session_state.question_index += 1
                                         st.session_state.show_feedback = False
                                         st.session_state.user_answer = None
+                                        st.session_state.pop('scored_q', None) # Clear marker for next question
                                         st.rerun() # Rerun to display the next question
                                         
                             else:
                                 # Quiz Finished
                                 st.balloons()
-                                st.success(f"🎉 Quiz '{st.session_state.current_quiz_title}' completed! Great job.")
+                                st.success(f"🎉 Quiz '{st.session_state.current_quiz_title}' completed!")
+                                
+                                # NEW: Display Final Score
+                                colA, colB = st.columns(2)
+                                with colA:
+                                    st.metric(label="✅ Correct Answers", value=st.session_state.score_correct)
+                                with colB:
+                                    st.metric(label="❌ Wrong Answers", value=st.session_state.score_wrong)
+                                
                                 if st.button("Start Another Quiz"):
                                     st.session_state.current_quiz_title = None
+                                    st.session_state.score_correct = 0
+                                    st.session_state.score_wrong = 0
                                     st.rerun()
                                     
             else:
+                # This is the section that prints the warning if the quiz flag is not set or link is missing
                 st.info("No quizzes are currently available during this session. Check with the organizer.")
             
-
