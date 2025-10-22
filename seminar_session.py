@@ -2,6 +2,32 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
+# --- NEW: Caching function for Seminar Data ---
+@st.cache_data(ttl=600)  # Cache the data for 10 minutes (600 seconds)
+def get_seminar_data(db_connector, url, name):
+    """Fetches and processes seminar data, caching the result."""
+    seminar_sheet = db_connector.get_worksheet(url, name)
+    if seminar_sheet:
+        seminars_df = db_connector.get_dataframe(seminar_sheet)
+        seminars_df['Event_Date'] = pd.to_datetime(seminars_df['Event_Date'], errors='coerce')
+        today = pd.to_datetime(datetime.now().date())
+        upcoming_seminars_df = seminars_df[seminars_df['Event_Date'] >= today].copy()
+        upcoming_seminars_df.sort_values(by='Event_Date', inplace=True)
+        return upcoming_seminars_df
+    return pd.DataFrame()
+
+# --- NEW: Caching function for Presenter/Enrollment Data ---
+@st.cache_data(ttl=600)  # Cache enrollment data for 10 minutes
+def get_presenters_data(db_connector, link, worksheet_name):
+    """Fetches presenter data from a specific enrollment link."""
+    try:
+        enrollment_ws = db_connector.get_worksheet(link, worksheet_name)
+        if enrollment_ws:
+            return db_connector.get_dataframe(enrollment_ws)
+    except Exception:
+        return pd.DataFrame()
+    return pd.DataFrame()
+
 def seminar_session_main(db_connector):
     """The main function for the Live Seminar Session page."""
     st.header("🎤 Go to a Live Session")
@@ -12,26 +38,22 @@ def seminar_session_main(db_connector):
         st.session_state.pop('show_live_session', None)
         st.session_state.pop('live_session_details', None)
         st.session_state.pop('live_session_presenter', None)
+        
+        # Invalidate the cached data to force a fresh API call
+        get_seminar_data.clear()
+        get_presenters_data.clear()
+        
         st.rerun()
 
     # Define constants for Google Sheets
     SEMINAR_SHEET_URL = "https://docs.google.com/spreadsheets/d/1EeuqOzuc90owGbTZTp7XNJObYkFc9gzbG_v-Mko78mc/edit?usp=sharing"
     SEMINAR_WORKSHEET_NAME = "Seminar_Guest_Event_List"
 
-    # --- Fetch and Filter Seminar Data ---
+    # --- Fetch and Filter Seminar Data (Now uses cached function) ---
     try:
-        seminar_sheet = db_connector.get_worksheet(SEMINAR_SHEET_URL, SEMINAR_WORKSHEET_NAME)
-        if seminar_sheet:
-            seminars_df = db_connector.get_dataframe(seminar_sheet)
-            seminars_df['Event_Date'] = pd.to_datetime(seminars_df['Event_Date'], errors='coerce')
-            today = pd.to_datetime(datetime.now().date())
-            upcoming_seminars_df = seminars_df[seminars_df['Event_Date'] >= today].copy()
-            upcoming_seminars_df.sort_values(by='Event_Date', inplace=True)
-        else:
-            st.error("Could not connect to the seminar list.")
-            upcoming_seminars_df = pd.DataFrame()
+        upcoming_seminars_df = get_seminar_data(db_connector, SEMINAR_SHEET_URL, SEMINAR_WORKSHEET_NAME)
     except Exception as e:
-        st.error(f"An error occurred while fetching seminar data: {e}")
+        st.error(f"An error occurred while fetching seminar data: {e}. Check your connection.")
         upcoming_seminars_df = pd.DataFrame()
 
     # --- Selection Logic (only show if not in a live session view) ---
@@ -51,12 +73,12 @@ def seminar_session_main(db_connector):
             seminar_details = upcoming_seminars_df[upcoming_seminars_df['Seminar_Event_Name'] == selected_event_name].iloc[0]
             enrollment_sheet_link = seminar_details.get('Seminar_GuestLecture_Sheet_Link')
             if enrollment_sheet_link:
-                try:
-                    enrollment_ws = db_connector.get_worksheet(enrollment_sheet_link, "Seminar_GuestLecture_List")
-                    if enrollment_ws:
-                        presenters_df = db_connector.get_dataframe(enrollment_ws)
-                except Exception:
-                    st.warning("Could not fetch presenter list for this event.")
+                # --- Get presenter data using cached function ---
+                presenters_df = get_presenters_data(db_connector, enrollment_sheet_link, "Seminar_GuestLecture_List")
+                
+                if presenters_df.empty:
+                     st.warning("Could not fetch presenter list for this event.")
+
 
         selected_presenter = None
         if seminar_details is not None and not presenters_df.empty:
@@ -79,6 +101,8 @@ def seminar_session_main(db_connector):
         st.success(f"Now Viewing: {live_details.get('Seminar_Event_Name')} with {live_presenter}")
 
         if st.button("🔄 Refresh Session Info"):
+            # Clear data cache and rerun to get fresh info on demand
+            get_presenters_data.clear() 
             st.rerun()
 
         tab1, tab2, tab3 = st.tabs(["▶️ Live Session", "🖼️ Slide View", "❓ Q&A"])
@@ -97,24 +121,18 @@ def seminar_session_main(db_connector):
             
             slides_link_from_sheet = ''
             enrollment_link = live_details.get('Seminar_GuestLecture_Sheet_Link')
+            
+            # Use cached function here as well
             if enrollment_link:
-                # --- ADDED FOR DEBUGGING ---
                 st.info(f"Debugging: Looking for slides in this sheet: {enrollment_link}")
-                try:
-                    enrollment_ws = db_connector.get_worksheet(enrollment_link, "Seminar_GuestLecture_List")
-                    st.info(f"Debugging: enrollment_ws: {enrollment_ws}")
-                    if enrollment_ws:
-                        enrollment_df = db_connector.get_dataframe(enrollment_ws)
-                        st.write(enrollment_df.head())
-                        presenter_row = enrollment_df[enrollment_df['Presentor_FullName'] == live_presenter]
-                        st.write(live_presenter, enrollment_df['Presentor_FullName'] )
-                        st.info(presenter_row)
-                        if not presenter_row.empty:
-                            for i in range(len(presenter_row)):
-                                slides_link_from_sheet = presenter_row.iloc[i].get('PresentationLink', '')
-                                st.write(slides_link_from_sheet )
-                except Exception:
-                    st.warning("Could not automatically retrieve the presentation link.")
+                enrollment_df = get_presenters_data(db_connector, enrollment_link, "Seminar_GuestLecture_List")
+
+                if not enrollment_df.empty:
+                    presenter_row = enrollment_df[enrollment_df['Presentor_FullName'] == live_presenter]
+                    if not presenter_row.empty:
+                        slides_link_from_sheet = presenter_row.iloc[0].get('PresentationLink', '')
+                else:
+                    st.warning("Could not automatically retrieve the presentation link from the enrollment sheet.")
 
             manual_slides_link = st.text_input("Slides URL:", value=slides_link_from_sheet, placeholder="Paste the Google Slides URL here")
             if manual_slides_link and "docs.google.com/presentation" in manual_slides_link:
