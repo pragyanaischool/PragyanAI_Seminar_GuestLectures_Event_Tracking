@@ -6,9 +6,11 @@ from datetime import datetime
 @st.cache_data(ttl=600)  # Cache the data for 10 minutes (600 seconds)
 def get_seminar_data(_db_connector, url, name):
     """Fetches and processes seminar data, caching the result."""
+    # Note: _db_connector is intentionally prefixed with '_' so Streamlit doesn't try to hash the object
     seminar_sheet = _db_connector.get_worksheet(url, name)
     if seminar_sheet:
         seminars_df = _db_connector.get_dataframe(seminar_sheet)
+        # Ensure date column is correct type before filtering
         seminars_df['Event_Date'] = pd.to_datetime(seminars_df['Event_Date'], errors='coerce')
         today = pd.to_datetime(datetime.now().date())
         upcoming_seminars_df = seminars_df[seminars_df['Event_Date'] >= today].copy()
@@ -20,11 +22,14 @@ def get_seminar_data(_db_connector, url, name):
 @st.cache_data(ttl=600)  # Cache enrollment data for 10 minutes
 def get_presenters_data(_db_connector, link, worksheet_name):
     """Fetches presenter data from a specific enrollment link."""
+    # Note: _db_connector is intentionally prefixed with '_'
     try:
         enrollment_ws = _db_connector.get_worksheet(link, worksheet_name)
         if enrollment_ws:
             return _db_connector.get_dataframe(enrollment_ws)
-    except Exception:
+    except Exception as e:
+        # Returning an empty DataFrame here is safer than raising an exception
+        # st.warning(f"Error fetching presenter data for link: {e}") 
         return pd.DataFrame()
     return pd.DataFrame()
 
@@ -51,6 +56,7 @@ def seminar_session_main(db_connector):
 
     # --- Fetch and Filter Seminar Data (Now uses cached function) ---
     try:
+        # Pass db_connector as the non-hashed argument
         upcoming_seminars_df = get_seminar_data(db_connector, SEMINAR_SHEET_URL, SEMINAR_WORKSHEET_NAME)
     except Exception as e:
         st.error(f"An error occurred while fetching seminar data: {e}. Check your connection.")
@@ -74,6 +80,7 @@ def seminar_session_main(db_connector):
             enrollment_sheet_link = seminar_details.get('Seminar_GuestLecture_Sheet_Link')
             if enrollment_sheet_link:
                 # --- Get presenter data using cached function ---
+                # Pass db_connector as the non-hashed argument
                 presenters_df = get_presenters_data(db_connector, enrollment_sheet_link, "Seminar_GuestLecture_List")
                 
                 if presenters_df.empty:
@@ -125,6 +132,7 @@ def seminar_session_main(db_connector):
             # Use cached function here as well
             if enrollment_link:
                 st.info(f"Debugging: Looking for slides in this sheet: {enrollment_link}")
+                # Pass db_connector as the non-hashed argument
                 enrollment_df = get_presenters_data(db_connector, enrollment_link, "Seminar_GuestLecture_List")
 
                 if not enrollment_df.empty:
