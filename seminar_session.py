@@ -131,7 +131,7 @@ def seminar_session_main(db_connector):
             
             # Use cached function here as well
             if enrollment_link:
-                st.info(f"Debugging: Looking for slides in this sheet: {enrollment_link}")
+                #st.info(f"Debugging: Looking for slides in this sheet: {enrollment_link}")
                 # Pass db_connector as the non-hashed argument
                 enrollment_df = get_presenters_data(db_connector, enrollment_link, "Seminar_GuestLecture_List")
 
