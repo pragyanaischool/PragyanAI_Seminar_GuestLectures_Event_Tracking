@@ -32,20 +32,18 @@ def get_presenters_data(_db_connector, link, worksheet_name):
         return pd.DataFrame()
     return pd.DataFrame()
 
-# --- NEW: Caching function for Quiz List Data ---
+# --- MODIFIED: Caching function to fetch the Quiz Workbook and Worksheet Titles ---
 @st.cache_data(ttl=600)
-def get_quiz_list_data(_db_connector, link):
-    """Fetches quiz list data from a specific sheet link (Dict_Quizz_List)."""
+def get_quiz_workbook_and_sheets(_db_connector, link):
+    """Fetches the quiz workbook and returns the spreadsheet object and all worksheet titles."""
     try:
-        # Assuming the quiz list itself is the entire first sheet/tab of the linked workbook
         spreadsheet = _db_connector.client.open_by_url(link)
-        quiz_list_ws = spreadsheet.worksheets()[0] # Use the first worksheet in the linked quiz sheet
-        if quiz_list_ws:
-            return _db_connector.get_dataframe(quiz_list_ws)
+        sheet_titles = [ws.title for ws in spreadsheet.worksheets()]
+        # Return the actual spreadsheet object and the list of sheet names
+        return spreadsheet, sheet_titles
     except Exception as e:
-        st.warning(f"Failed to fetch quiz list sheet: {e}")
-        return pd.DataFrame()
-    return pd.DataFrame()
+        st.warning(f"Failed to fetch quiz workbook or titles. Check link and sharing: {e}")
+        return None, []
 
 # --- NEW: Helper function to display slides (reused in tabs)
 def display_slides_section(slides_link_from_sheet, manual_slides_link, live_presenter, height=480):
@@ -172,6 +170,14 @@ def seminar_session_main(db_connector):
         # Initialize RAG chat history once
         if 'rag_history' not in st.session_state:
             st.session_state.rag_history = []
+        
+        # Initialize Quiz State
+        if 'current_quiz_title' not in st.session_state:
+            st.session_state.current_quiz_title = None
+            st.session_state.quiz_df = pd.DataFrame()
+            st.session_state.question_index = 0
+            st.session_state.show_feedback = False
+            st.session_state.user_answer = None
 
 
         # --- Tabbed Interface ---
@@ -286,26 +292,101 @@ def seminar_session_main(db_connector):
             if is_quizz_available.upper() == 'YES' and quiz_list_link_from_sheet:
                 st.success("Quizzes are available for this session! Test your knowledge.")
                 
-                quiz_list_df = get_quiz_list_data(db_connector, quiz_list_link_from_sheet) 
+                # Fetch the quiz workbook and available sheet names (Quizzes)
+                quiz_spreadsheet, quiz_titles = get_quiz_workbook_and_sheets(db_connector, quiz_list_link_from_sheet) 
                 
-                if not quiz_list_df.empty:
-                    st.markdown("Select a quiz to attempt:")
-                    
-                    # Assuming the quiz list sheet has columns like 'Quiz No' and 'Quiz Link'
-                    for index, row in quiz_list_df.iterrows():
-                        quiz_no = row.get('Quiz No', f"Quiz {index+1}")
-                        quiz_link = row.get('Quiz Link', '#')
-                        
-                        if quiz_link and quiz_link != '#':
-                            st.link_button(f"Start Quiz: {quiz_no}", quiz_link, key=f"start_quiz_{index}")
-                        else:
-                            st.warning(f"Link not available for {quiz_no}.")
-                            
-                    st.caption("Note: Quizzes open in a new tab. After completion, explanations would be displayed here.")
+                if not quiz_titles:
+                    st.warning("Quiz workbook accessible, but no quiz sheets (tabs) were found inside.")
                 else:
-                    st.warning("Quiz list sheet found, but no quizzes are listed or column headers are incorrect.")
+                    # --- QUIZ SELECTION ---
+                    selected_quiz_title = st.selectbox("Select a Quiz:", options=["-- Select a Quiz --"] + quiz_titles, key='quiz_selector')
                     
+                    if selected_quiz_title != "-- Select a Quiz --":
+                        if st.session_state.current_quiz_title != selected_quiz_title:
+                            # New quiz selected, reset the state
+                            st.session_state.current_quiz_title = selected_quiz_title
+                            st.session_state.question_index = 0
+                            st.session_state.show_feedback = False
+                            st.session_state.quiz_df = pd.DataFrame() # Clear old data
+                            
+                            # Load the selected quiz data
+                            try:
+                                quiz_ws = quiz_spreadsheet.worksheet(selected_quiz_title)
+                                st.session_state.quiz_df = db_connector.get_dataframe(quiz_ws)
+                                
+                                # Validation: Ensure required columns are present
+                                required_cols = ['Question', 'Option A', 'Option B', 'Option C', 'Option D', 'Correct Answer', 'Explanation']
+                                if not all(col in st.session_state.quiz_df.columns for col in required_cols):
+                                    st.error(f"Quiz sheet '{selected_quiz_title}' is missing required columns. Must have: {', '.join(required_cols)}.")
+                                    st.session_state.current_quiz_title = None # Invalidate selection
+                                    st.session_state.quiz_df = pd.DataFrame()
+                                st.rerun() # Rerun to start quiz display
+                            except Exception as e:
+                                st.error(f"Failed to load quiz data: {e}")
+                                st.session_state.current_quiz_title = None
+                        
+                        
+                        # --- QUIZ RUNNING LOGIC ---
+                        if not st.session_state.quiz_df.empty and st.session_state.current_quiz_title:
+                            quiz_df = st.session_state.quiz_df
+                            q_idx = st.session_state.question_index
+                            
+                            if q_idx < len(quiz_df):
+                                # Display Current Question
+                                current_q = quiz_df.iloc[q_idx]
+                                
+                                st.markdown(f"**Question {q_idx + 1} of {len(quiz_df)}:** {current_q['Question']}")
+                                
+                                # Options
+                                options = {
+                                    'A': current_q.get('Option A'),
+                                    'B': current_q.get('Option B'),
+                                    'C': current_q.get('Option C'),
+                                    'D': current_q.get('Option D')
+                                }
+                                valid_options = [f"{key}. {value}" for key, value in options.items() if value]
+                                
+                                with st.form(key=f"quiz_q_{q_idx}"):
+                                    user_choice = st.radio("Select your answer:", valid_options, key=f"q_radio_{q_idx}")
+                                    submit_answer = st.form_submit_button("Submit Answer")
+                                    
+                                if submit_answer:
+                                    # Extract just the letter (A, B, C, D) from the user's selection
+                                    st.session_state.user_answer = user_choice.split('.')[0].strip()
+                                    st.session_state.show_feedback = True
+                                    st.rerun() # Rerun to show feedback
+                                    
+                                # --- FEEDBACK DISPLAY ---
+                                if st.session_state.show_feedback:
+                                    correct_answer_letter = current_q['Correct Answer'].strip().upper()
+                                    is_correct = st.session_state.user_answer == correct_answer_letter
+                                    
+                                    # Display feedback message
+                                    if is_correct:
+                                        st.success(f"✅ Correct! You chose option {st.session_state.user_answer}.")
+                                    else:
+                                        st.error(f"❌ Incorrect. You chose option {st.session_state.user_answer}.")
+                                    
+                                    # Display correct answer and explanation
+                                    st.markdown(f"**Correct Answer:** **{correct_answer_letter}**. {options.get(correct_answer_letter, 'Option not found.')}")
+                                    st.markdown(f"**Explanation:** {current_q.get('Explanation', 'No explanation provided.')}")
+                                    
+                                    # Button to move to the next question
+                                    if st.button("Next Question ▶️", key="next_q_btn"):
+                                        st.session_state.question_index += 1
+                                        st.session_state.show_feedback = False
+                                        st.session_state.user_answer = None
+                                        st.rerun() # Rerun to display the next question
+                                        
+                            else:
+                                # Quiz Finished
+                                st.balloons()
+                                st.success(f"🎉 Quiz '{st.session_state.current_quiz_title}' completed! Great job.")
+                                if st.button("Start Another Quiz"):
+                                    st.session_state.current_quiz_title = None
+                                    st.rerun()
+                                    
             else:
                 st.info("No quizzes are currently available during this session. Check with the organizer.")
             
-            # --- RAG/AI LOGIC CLEANUP: Removed duplicate chat input/output logic.
+
