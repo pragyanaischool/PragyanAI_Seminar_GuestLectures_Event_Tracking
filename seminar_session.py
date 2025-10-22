@@ -4,11 +4,11 @@ from datetime import datetime
 
 # --- NEW: Caching function for Seminar Data ---
 @st.cache_data(ttl=600)  # Cache the data for 10 minutes (600 seconds)
-def get_seminar_data(db_connector, url, name):
+def get_seminar_data(_db_connector, url, name):
     """Fetches and processes seminar data, caching the result."""
-    seminar_sheet = db_connector.get_worksheet(url, name)
+    seminar_sheet = _db_connector.get_worksheet(url, name)
     if seminar_sheet:
-        seminars_df = db_connector.get_dataframe(seminar_sheet)
+        seminars_df = _db_connector.get_dataframe(seminar_sheet)
         seminars_df['Event_Date'] = pd.to_datetime(seminars_df['Event_Date'], errors='coerce')
         today = pd.to_datetime(datetime.now().date())
         upcoming_seminars_df = seminars_df[seminars_df['Event_Date'] >= today].copy()
@@ -18,12 +18,12 @@ def get_seminar_data(db_connector, url, name):
 
 # --- NEW: Caching function for Presenter/Enrollment Data ---
 @st.cache_data(ttl=600)  # Cache enrollment data for 10 minutes
-def get_presenters_data(db_connector, link, worksheet_name):
+def get_presenters_data(_db_connector, link, worksheet_name):
     """Fetches presenter data from a specific enrollment link."""
     try:
-        enrollment_ws = db_connector.get_worksheet(link, worksheet_name)
+        enrollment_ws = _db_connector.get_worksheet(link, worksheet_name)
         if enrollment_ws:
-            return db_connector.get_dataframe(enrollment_ws)
+            return _db_connector.get_dataframe(enrollment_ws)
     except Exception:
         return pd.DataFrame()
     return pd.DataFrame()
@@ -86,7 +86,7 @@ def seminar_session_main(db_connector):
             presenter_options = presenters_df['Presentor_FullName'].tolist() if 'Presentor_FullName' in presenters_df.columns else []
             selected_presenter = st.selectbox("Choose a presenter:", options=["-- Select a Presenter --"] + presenter_options)
 
-        if selected_presenter and selected_presenter != "-- Select a Presenter --":
+        if selected_presenter and selected_presenter != "-- Select an Event --":
             if st.button("🚀 Go to Live Session", use_container_width=True, type="primary"):
                 st.session_state['show_live_session'] = True
                 st.session_state['live_session_details'] = seminar_details.to_dict()
@@ -152,3 +152,4 @@ def seminar_session_main(db_connector):
                     st.success(f"Your question has been submitted to the {ask_target}!")
                 elif submit_question:
                     st.warning("Please enter a question.")
+                    
