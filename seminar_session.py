@@ -168,6 +168,11 @@ def seminar_session_main(db_connector):
                     slides_link_from_sheet = presenter_row.iloc[0].get('PresentationLink', '')
                     quiz_list_link_from_sheet = presenter_row.iloc[0].get('Dict_Quizz_List', '')
                     is_quizz_available = str(presenter_row.iloc[0].get('IsQuizz_During_Session_Available', 'No')).strip()
+        
+        # Initialize RAG chat history once
+        if 'rag_history' not in st.session_state:
+            st.session_state.rag_history = []
+
 
         # --- Tabbed Interface ---
         tab1, tab2, tab3, tab4 = st.tabs(["▶️ Live Session", "🖼️ Slide View", "❓ Q&A", "🧪 Quizz & RAG"]) # Added 4th tab
@@ -187,23 +192,65 @@ def seminar_session_main(db_connector):
             display_slides_section(slides_link_from_sheet, None, live_presenter, height=480)
 
         with tab3:
-            st.subheader("Ask a Question to the Presenter")
-            st.write("Submit your questions directly to the presenter.")
+            st.subheader("Ask a Question")
+            st.write("Submit your questions to the Presenter or the AI Assistant.")
+            
+            # Show chat history if any AI questions have been asked
+            if any(role == "AI Assistant" for role, text in st.session_state.rag_history):
+                st.markdown("##### 💬 AI Assistant Conversation History")
+                # Use a specific key for the history container if needed, or just st.container
+                chat_container = st.container(height=200) 
+                with chat_container:
+                    for role, text in st.session_state.rag_history:
+                        if role != "Presenter": # Only display AI chat history here
+                            st.markdown(f"**{role}:** {text}")
+                            st.markdown("---")
             
             with st.form("qa_form", clear_on_submit=True):
                 slide_number = st.text_input("Relevant Slide Number (if any)")
                 question_text = st.text_area("Your Question *")
-                
-                submit_question = st.form_submit_button("Submit Question to Presenter")
+                # Radio button to select target (Presenter or AI)
+                ask_target = st.radio("Ask To:", ("Presenter", "AI Assistant (Llama-3)"), horizontal=True)
+
+                submit_question = st.form_submit_button("Submit Question")
 
                 if submit_question:
                     if not question_text:
                         st.warning("Please enter a question.")
                     else:
-                        st.success(f"Your question has been submitted to the Presenter!")
-                        st.write(f"**Your Question:** {question_text}")
-                        if slide_number:
-                            st.write(f"**Regarding Slide:** {slide_number}")
+                        if ask_target == "Presenter":
+                            st.success(f"Your question has been submitted to the Presenter!")
+                            # In a real app, this would save to a presenter Q&A sheet
+                            st.write(f"**Your Question:** {question_text}")
+                            if slide_number:
+                                st.write(f"**Regarding Slide:** {slide_number}")
+                        
+                        elif ask_target == "AI Assistant (Llama-3)":
+                            # AI Logic: Simulate RAG pipeline and update history
+                            st.session_state.rag_history.append(("You", question_text))
+                            
+                            with st.spinner("AI Assistant is processing... Simulating RAG via GROQ/LangChain..."):
+                                
+                                # --- Simulated RAG Workflow ---
+                                retrieved_content = (
+                                    "**Retrieved Snippet (FAISS/PPT Content):** The RAG pipeline uses the **llama-3.3-70b-versatile** model on **GROQ** to run LangChain components "
+                                    "(`create_retrieval_chain`, `create_stuff_documents_chain`). This ensures the answer is grounded by the presentation text."
+                                )
+                                
+                                simulated_response = (
+                                    f"**AI Response (Simulated):** The AI has processed your query: **'{question_text}'**.\n\n"
+                                    f"This demonstrates the RAG process where the AI first retrieves the most relevant context from the embedded presentation content, and then generates an answer.\n\n"
+                                    f"***[Context Retrieved]:*** {retrieved_content}\n\n"
+                                    f"**[Final Answer]:** Based on the retrieved context, your answer is grounded and verifiable against the slide material."
+                                )
+                                
+                                # Append AI response to history
+                                st.session_state.rag_history.append(("AI Assistant", simulated_response))
+                                
+                                # Clear the input box and rerun to update chat display
+                                # Note: Since clear_on_submit=True is set on the form, we only need to rerun.
+                                st.rerun()
+
 
         with tab4:
             st.subheader("Interactive Quizzing & AI Support (RAG)")
@@ -242,18 +289,4 @@ def seminar_session_main(db_connector):
             else:
                 st.info("No quizzes are currently available during this session. Check with the organizer.")
             
-            # --- 3. RAG/AI LOGIC ---
-            st.markdown("---")
-            st.markdown("##### 🧠 AI Assistant (Llama-3 RAG)")
-            st.info("Ask the Llama-3 AI questions about the presentation content for instant, grounded answers.")
-
-            with st.form("rag_qa_form", clear_on_submit=True):
-                rag_question_text = st.text_area("Your Question for the AI *", key='rag_q')
-                rag_submit_button = st.form_submit_button("Ask Llama-3")
-                
-                if rag_submit_button:
-                    if not rag_question_text:
-                        st.warning("Please enter a question for the AI.")
-                    else:
-                        with st.spinner("Llama-3 is generating response..."):
-                            st.success(f"**AI Response (Simulated):** The Llama-3 model has processed your question, '{rag_question_text}'. This RAG feature is ready for API integration, where it will retrieve information from the slides to provide a fact-checked response.")
+            # --- RAG/AI LOGIC CLEANUP: Removed duplicate chat input/output logic.
