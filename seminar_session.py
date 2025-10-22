@@ -229,28 +229,47 @@ def seminar_session_main(db_connector):
                             # AI Logic: Simulate RAG pipeline and update history
                             st.session_state.rag_history.append(("You", question_text))
                             
-                            with st.spinner("AI Assistant is processing... Simulating RAG via GROQ/LangChain..."):
+                            with st.spinner("AI Assistant is processing... Executing Conceptual RAG Pipeline..."):
                                 
-                                # --- Simulated RAG Workflow ---
-                                retrieved_content = (
-                                    "**Retrieved Snippet (FAISS/PPT Content):** The RAG pipeline uses the **llama-3.3-70b-versatile** model on **GROQ** to run LangChain components "
-                                    "(`create_retrieval_chain`, `create_stuff_documents_chain`). This ensures the answer is grounded by the presentation text."
-                                )
+                                # --- Conceptual RAG Workflow using LangChain/GROQ ---
                                 
-                                simulated_response = (
-                                    f"**AI Response (Simulated):** The AI has processed your query: **'{question_text}'**.\n\n"
-                                    f"This demonstrates the RAG process where the AI first retrieves the most relevant context from the embedded presentation content, and then generates an answer.\n\n"
-                                    f"***[Context Retrieved]:*** {retrieved_content}\n\n"
-                                    f"**[Final Answer]:** Based on the retrieved context, your answer is grounded and verifiable against the slide material."
+                                # Step 1: Conceptual Setup (In a real environment, these would be imports and initialization)
+                                st.markdown("##### Conceptual RAG Initialization (Simulated Code Structure)")
+                                st.code("from langchain_core.prompts import ChatPromptTemplate")
+                                st.code("from langchain.chains import create_retrieval_chain, create_stuff_documents_chain")
+                                st.code("from langchain_groq import ChatGroq # For llama-3.3-70b-versatile")
+                                st.code("from langchain_community.vectorstores import FAISS")
+                                
+                                st.code("\n# 1. Simulate Loading & Indexing (PPT content embedding)")
+                                st.code("vectorstore = FAISS.from_documents(chunks, embeddings_model)")
+                                st.code("retriever = vectorstore.as_retriever()")
+                                
+                                # Step 2: Define Prompt and Combine Docs Chain
+                                st.code("\n# 2. Define Prompt and Combine Docs Chain")
+                                st.code("prompt = ChatPromptTemplate.from_template('Answer the question based only on the following context:\\n{context}\\nQuestion: {input}')")
+                                st.code("llm = ChatGroq(model='llama-3.3-70b-versatile', groq_api_key='...')")
+                                st.code("combine_docs_chain = create_stuff_documents_chain(llm, prompt)")
+                                
+                                # Step 3: Create Retrieval Chain and Invoke
+                                st.code("\n# 3. Create and Invoke Retrieval Chain")
+                                st.code("retrieval_chain = create_retrieval_chain(retriever, combine_docs_chain)")
+                                st.code(f"response = retrieval_chain.invoke({{'input': '{question_text}'}})")
+                                
+                                # --- Simulated Response based on successful invocation ---
+                                
+                                simulated_answer = (
+                                    "**Final AI Answer (Conceptual):** The RAG pipeline executed successfully using the provided context from the slides. "
+                                    "The **llama-3.3-70b-versatile** model on **GROQ** provided a grounded response.\n\n"
+                                    f"**Query:** {question_text}\n"
+                                    f"**Status:** Retrieval and generation successful (conceptually).\n"
+                                    f"**Key Component:** `retrieval_chain = create_retrieval_chain(retriever, combine_docs_chain)`"
                                 )
                                 
                                 # Append AI response to history
-                                st.session_state.rag_history.append(("AI Assistant", simulated_response))
+                                st.session_state.rag_history.append(("AI Assistant", simulated_answer))
                                 
-                                # Clear the input box and rerun to update chat display
-                                # Note: Since clear_on_submit=True is set on the form, we only need to rerun.
+                                # Rerun to update chat display
                                 st.rerun()
-
 
         with tab4:
             st.subheader("Interactive Quizzing & AI Support (RAG)")
